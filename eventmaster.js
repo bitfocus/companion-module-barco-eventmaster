@@ -20,13 +20,19 @@ instance.prototype.init = function() {
 	debug = self.debug;
 	log = self.log;
 
-	self.status(1, 'Trying to connect');
+	self.status(self.STATE_UNKNOWN);
 
 	debug('creating eventmaster');
 
 	self.ok = false;
 	self.retry_interval = setInterval(self.retry.bind(self), 15000);
 	self.retry();
+};
+
+instance.prototype.updateConfig = function(config) {
+	var self = this;
+
+	self.config = config;
 };
 
 instance.prototype.retry = function() {
@@ -44,12 +50,12 @@ instance.prototype.retry = function() {
 					if (isAlive == true) {
 						debug("START WITH", self.config.host);
 						self.eventmaster = new EventMaster(self.config.host);
-						self.status(0);
+						self.status(self.STATE_WARNING, 'Connecting');
 						log('info', 'Connecting to '+self.config.host)
 						debug('host', self.config);
 					}
 					else {
-						self.status(2, 'No ping reply from '+self.config.host);
+						self.status(self.STATE_ERROR, 'No ping reply from '+self.config.host);
 						log('error','No ping reply from '+self.config.host+'??')
 					}
 				}, cfg);
