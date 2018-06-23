@@ -70,6 +70,13 @@ instance.prototype.config_fields = function () {
 	var self = this;
 	return [
 		{
+			type: 'text',
+			id: 'info',
+			width: 12,
+			label: 'Information',
+			value: 'This module uses the official EventMaster JSON API. Unfortunately the JSON API is not available in the simulator, so you need to use the real deal to get this working.'
+		},
+		{
 			type: 'textinput',
 			id: 'host',
 			label: 'Target IP',
