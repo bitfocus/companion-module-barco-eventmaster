@@ -1,4 +1,4 @@
-var EventMaster = require('barco-eventmaster');
+﻿var EventMaster = require('barco-eventmaster');
 var checkIp     = require('check-ip');
 var ping        = require('ping');
 var instance_skel = require('../../instance_skel');
@@ -52,7 +52,7 @@ instance.prototype.retry = function() {
 						self.eventmaster = new EventMaster(self.config.host);
 						self.status(self.STATE_WARNING, 'Connecting');
 						log('info', 'Connecting to '+self.config.host)
-						debug('host', self.config);
+                        debug('host', self.config);
 					}
 					else {
 						self.status(self.STATE_ERROR, 'No ping reply from '+self.config.host);
@@ -93,13 +93,39 @@ instance.prototype.destroy = function() {
 	delete self.eventmaster;
 	debug("destroy");;
 };
+instance.prototype.CHOICES_TYPEOFSOURCE = [
+    { label: 'Input', id: '0' },
+    { label: 'Background', id: '1' },
+    { label: 'Screen destination', id: '2' },
+    { label: 'Aux destination', id: '3' }
+];
 
 instance.prototype.actions = function(system) {
 	var self = this;
 
 	var actions = {
 		'trans_all': { label: 'Take/Trans Active' },
-		'cut_all': { label: 'Cut Active' }
+        'cut_all': { label: 'Cut Active' },
+        //next step would be to load the inputdata from JSON
+        'freeze': {
+            label: 'Freeze/Unfreeze',
+            options: [
+                {
+                    type: 'dropdown',
+                    label: 'Type op source',
+                    id: 'typeSource',
+                    default: '0',
+                    choices: self.CHOICES_TYPEOFSOURCE
+                },
+                {
+                    type: 'textinput',
+                    label: 'Input ID',
+                    id: 'inputId',
+                    default: '1',
+                    regex: self.REGEX_NUMBER
+                }
+            ]
+        },
 	};
 
 	if (self.eventmaster !== undefined) {
@@ -160,8 +186,8 @@ instance.prototype.action = function(action) {
 	}
 
 	else if (id == 'trans_all') {
-		log('info','Trans/Take All');
-
+        log('info', 'Trans/Take All');
+        self.eventmaster.eventmaster.
 		if (self.eventmaster !== undefined) {
 			self.eventmaster.allTrans(function(obj, res) {
 				debug('trans all response', res);
@@ -170,7 +196,31 @@ instance.prototype.action = function(action) {
 			});
 
 		}
-	}
+    }
+
+    else if (id == 'freeze') {
+        log('info', 'freeze');
+
+        if (self.eventmaster !== undefined) {
+            self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 1, function (obj, res) {
+                debug('freeze all response', res);
+            }).on('error', function (err) {
+                log('error', 'EventMaster Error: ' + err);
+            });
+        }
+    }
+
+    else if (id == 'unfreeze') {
+        log('info', 'unfreeze');
+
+        if (self.eventmaster !== undefined) {
+            self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 0, function (obj, res) {
+                debug('unfreeze all response', res);
+            }).on('error', function (err) {
+                log('error', 'EventMaster Error: ' + err);
+            });
+        }
+    }
 
 	else if (id == 'cut_all') {
 		log('info','Cut All');
