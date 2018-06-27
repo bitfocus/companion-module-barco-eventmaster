@@ -1,6 +1,6 @@
 {
   "name": "eventmaster",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Barco EventMaster plugin for Companion",
   "main": "eventmaster.js",
   "scripts": {

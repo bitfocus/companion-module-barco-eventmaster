@@ -187,7 +187,7 @@ instance.prototype.action = function(action) {
 instance.module_info = {
 	label: 'Barco EventMaster JSON',
 	id: 'eventmaster',
-	version: '0.0.1'
+	version: '0.0.2'
 };
 
 instance_skel.extendedBy(instance);
