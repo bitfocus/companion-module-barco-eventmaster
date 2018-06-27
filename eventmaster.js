@@ -48,17 +48,15 @@ instance.prototype.retry = function() {
 				};
 				ping.sys.probe(self.config.host, function(isAlive){
 					if (isAlive == true) {
-						debug("START WITH", self.config.host);
 						self.eventmaster = new EventMaster(self.config.host);
-						self.status(self.STATE_WARNING, 'Connecting');
-						log('info', 'Connecting to '+self.config.host)
-						debug('host', self.config);
+						self.status(self.STATE_OK);
 					}
 					else {
 						self.status(self.STATE_ERROR, 'No ping reply from '+self.config.host);
-						log('error','No ping reply from '+self.config.host+'??')
 					}
 				}, cfg);
+			} else {
+				self.status(self.STATE_ERROR, 'Invalid IP configured');
 			}
 		}
 	}
@@ -74,7 +72,7 @@ instance.prototype.config_fields = function () {
 			id: 'info',
 			width: 12,
 			label: 'Information',
-			value: 'This module uses the official EventMaster JSON API. Unfortunately the JSON API is not available in the simulator, so you need to use the real deal to get this working.'
+			value: 'This module uses the official EventMaster JSON API. Unfortunately the JSON API is not available in the simulator, so you need to use the real deal to get this working. If the status is OK, it ONLY means that the IP configured answers on icmp ping.'
 		},
 		{
 			type: 'textinput',
