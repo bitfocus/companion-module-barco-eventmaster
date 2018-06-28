@@ -126,7 +126,7 @@ instance.prototype.actions = function(system) {
                 }
             ]
         },
-	};
+    };
 
 	if (self.eventmaster !== undefined) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
@@ -185,16 +185,16 @@ instance.prototype.action = function(action) {
 		}
 	}
 
-	else if (id == 'trans_all') {
+    else if (id == 'trans_all') {
         log('info', 'Trans/Take All');
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.allTrans(function(obj, res) {
-				debug('trans all response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
+        if (self.eventmaster !== undefined) {
+            self.eventmaster.allTrans(function (obj, res) {
+                debug('trans all response', res);
+            }).on('error', function (err) {
+                log('error', 'EventMaster Error: ' + err);
+            });
 
-		}
+        }
     }
 
     else if (id == 'freeze') {
