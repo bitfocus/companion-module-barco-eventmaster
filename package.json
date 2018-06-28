@@ -1,11 +1,14 @@
 {
   "name": "eventmaster",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Barco EventMaster plugin for Companion",
   "main": "eventmaster.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "William Viker",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "barco-eventmaster": "^5.1.0"
+  }
 }
