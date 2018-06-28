@@ -1,6 +1,6 @@
-var EventMaster = require('barco-eventmaster');
-var checkIp = require('check-ip');
-var ping = require('ping');
+var EventMaster   = require('barco-eventmaster');
+var checkIp       = require('check-ip');
+var ping          = require('ping');
 var instance_skel = require('../../instance_skel');
 var debug;
 var log;
@@ -61,6 +61,7 @@ instance.prototype.retry = function() {
 			}
 		}
 	}
+
 	self.actions();
 }
 
@@ -90,19 +91,12 @@ instance.prototype.destroy = function() {
 	debug("destroy");;
 };
 
-instance.prototype.CHOICES_TYPEOFSOURCE = [{
-	label: 'Input',
-	id: '0'
-}, {
-	label: 'Background',
-	id: '1'
-}, {
-	label: 'Screen destination',
-	id: '2'
-}, {
-	label: 'Aux destination',
-	id: '3'
-}];
+instance.prototype.CHOICES_TYPEOFSOURCE = [
+	{ label: 'Input',              id: '0' },
+	{ label: 'Background',         id: '1' },
+	{ label: 'Screen destination', id: '2' },
+	{ label: 'Aux destination',    id: '3' }
+];
 
 instance.prototype.actions = function(system) {
 	var self = this;
@@ -156,12 +150,12 @@ instance.prototype.actions = function(system) {
 				}
 			}
 
-			self.system.emit('instance_actions', self.id, actions);
-
 		}).on('error', function(err) {
 			log('error', 'EventMaster Error: ' + err);
 		});
 	}
+
+	self.system.emit('instance_actions', self.id, actions);
 }
 
 instance.prototype.action = function(action) {
@@ -185,6 +179,7 @@ instance.prototype.action = function(action) {
 		var id = ida[4];
 		if (self.eventmaster !== undefined) {
 			log('info', 'Recall to PGM id:' + id)
+
 			self.eventmaster.activatePresetById(parseInt(id), 1, function(obj, res) {
 				debug('recall preset pgm response', res);
 			}).on('error', function(err) {
@@ -204,6 +199,7 @@ instance.prototype.action = function(action) {
 		}
 	} else if (id == 'freeze') {
 		log('info', 'freeze');
+
 		if (self.eventmaster !== undefined) {
 			self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 1, function(obj, res) {
 				debug('freeze all response', res);
@@ -213,6 +209,7 @@ instance.prototype.action = function(action) {
 		}
 	} else if (id == 'unfreeze') {
 		log('info', 'unfreeze');
+
 		if (self.eventmaster !== undefined) {
 			self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 0, function(obj, res) {
 				debug('unfreeze all response', res);
@@ -237,7 +234,7 @@ instance.prototype.action = function(action) {
 instance.module_info = {
 	label: 'Barco EventMaster JSON',
 	id: 'eventmaster',
-	version: '0.0.2'
+	version: '0.0.3'
 };
 
 instance_skel.extendedBy(instance);
