@@ -187,7 +187,6 @@ instance.prototype.action = function(action) {
 
 	else if (id == 'trans_all') {
         log('info', 'Trans/Take All');
-        self.eventmaster.eventmaster.
 		if (self.eventmaster !== undefined) {
 			self.eventmaster.allTrans(function(obj, res) {
 				debug('trans all response', res);
@@ -200,7 +199,6 @@ instance.prototype.action = function(action) {
 
     else if (id == 'freeze') {
         log('info', 'freeze');
-
         if (self.eventmaster !== undefined) {
             self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 1, function (obj, res) {
                 debug('freeze all response', res);
@@ -212,7 +210,6 @@ instance.prototype.action = function(action) {
 
     else if (id == 'unfreeze') {
         log('info', 'unfreeze');
-
         if (self.eventmaster !== undefined) {
             self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 0, function (obj, res) {
                 debug('unfreeze all response', res);
