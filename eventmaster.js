@@ -128,7 +128,23 @@ instance.prototype.actions = function(system) {
 		},
 		//next step would be to load the inputdata from JSON
 		'freeze': {
-			label: 'Freeze/Unfreeze',
+			label: 'Freeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Type of source',
+				id: 'typeSource',
+				default: '0',
+				choices: self.CHOICES_TYPEOFSOURCE
+			}, {
+				type: 'textinput',
+				label: 'Input ID',
+				id: 'inputId',
+				default: '1',
+				regex: self.REGEX_NUMBER
+			}]
+		},
+		'unfreeze': {
+			label: 'Unfreeze',
 			options: [{
 				type: 'dropdown',
 				label: 'Type of source',
