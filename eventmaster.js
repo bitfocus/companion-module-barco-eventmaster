@@ -108,24 +108,6 @@ instance.prototype.actions = function(system) {
 		'cut_all': {
 			label: 'Cut Active'
 		},
-		'Recall preset in PVW: ': {
-			options: [{
-				type: 'textinput',
-				label: 'Preset ID',
-				id: 'presetPVWId',
-				default: '1',
-				regex: self.REGEX_NUMBER
-			}]
-		},
-		'Recall preset in PGM: ': {
-			options: [{
-				type: 'textinput',
-				label: 'Preset ID',
-				id: 'presetPMGId',
-				default: '1',
-				regex: self.REGEX_NUMBER
-			}]
-		},
 		//next step would be to load the inputdata from JSON
 		'freeze': {
 			label: 'Freeze',
@@ -195,6 +177,7 @@ instance.prototype.actions = function(system) {
 instance.prototype.action = function(action) {
 	var self = this;
 	var id = action.action;
+	var opt = action.options;
 
 	debug('run action:', id);
 	if (id.match(/^recall_preset_pvw_id_/)) {
@@ -226,30 +209,6 @@ instance.prototype.action = function(action) {
 		if (self.eventmaster !== undefined) {
 			self.eventmaster.allTrans(function(obj, res) {
 				debug('trans all response', res);
-			}).on('error', function(err) {
-				log('error', 'EventMaster Error: ' + err);
-			});
-
-		}
-	} else if (id == 'presetPVWId') {
-		log('info', 'preset to PVW');
-
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.activatePresetById(parseInt(opt.presetPVWId), 0, function(
-				obj, res) {
-				debug('recall preset pvw response', res);
-			}).on('error', function(err) {
-				log('error', 'EventMaster Error: ' + err);
-			});
-
-		}
-	} else if (id == 'presetPGMId') {
-		log('info', 'preset to PGM');
-
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.activatePresetById(parseInt(opt.presetPGMId), 1, function(
-				obj, res) {
-				debug('recall preset pgm response', res);
 			}).on('error', function(err) {
 				log('error', 'EventMaster Error: ' + err);
 			});
