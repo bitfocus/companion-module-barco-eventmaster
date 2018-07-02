@@ -92,53 +92,9 @@ instance.prototype.destroy = function() {
 	debug("destroy");;
 };
 
-instance.prototype.CHOICES_TYPEOFSOURCE = [
-	{ label: 'Input',              id: '0' },
-	{ label: 'Background',         id: '1' },
-	{ label: 'Screen destination', id: '2' },
-	{ label: 'Aux destination',    id: '3' }
-];
-
 instance.prototype.actions = function(system) {
 	var self = this;
-
-	var actions = {
-		'trans_all': { label: 'Take/Trans Active' },
-		'cut_all': { label: 'Cut Active' },
-		'freeze': {
-			label: 'Freeze',
-			options: [{
-				type: 'dropdown',
-				label: 'Type of source',
-				id: 'typeSource',
-				default: '0',
-				choices: self.CHOICES_TYPEOFSOURCE
-			}, {
-				type: 'textinput',
-				label: 'Input ID',
-				id: 'inputId',
-				default: '1',
-				regex: self.REGEX_NUMBER
-			}]
-		},
-		'unfreeze': {
-			label: 'Unfreeze',
-			options: [{
-				type: 'dropdown',
-				label: 'Type of source',
-				id: 'typeSource',
-				default: '0',
-				choices: self.CHOICES_TYPEOFSOURCE
-			}, {
-				type: 'textinput',
-				label: 'Input ID',
-				id: 'inputId',
-				default: '1',
-				regex: self.REGEX_NUMBER
-			}]
-		}
-
-	};
+	self.CHOICES_SOURCES = [];
 
 	if (self.eventmaster !== undefined) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
@@ -164,7 +120,51 @@ instance.prototype.actions = function(system) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
+
+		self.eventmaster.listSources(0, function(obj, res) {
+
+			if (res !== undefined) {
+				for (var n in res) {
+
+					var source = res[n];
+
+					var s_name = 'Source name: ' + source.Name;
+					var	s_id = source.id;
+
+					self.CHOICES_SOURCES.push({ label: s_name, id: s_id});
+				}
+			}
+
+			self.system.emit('instance_actions', self.id, actions);
+
+		}).on('error', function(err) {
+			log('error','EventMaster Error: '+ err);
+		});
 	}
+
+	var actions = {
+		'trans_all': { label: 'Take/Trans Active' },
+		'cut_all': { label: 'Cut Active' },
+		'recall_next': { label: 'Recall Next Preset' },
+		'freeze': {
+			label: 'Freeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Source',
+				id: 'frzSource',
+				choices: self.CHOICES_SOURCES
+			}]
+		},
+		'unfreeze': {
+			label: 'Unfreeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Source',
+				id: 'unfrzSource',
+				choices: self.CHOICES_SOURCES
+			}]
+		}
+	};
 }
 
 instance.prototype.action = function(action) {
@@ -196,9 +196,7 @@ instance.prototype.action = function(action) {
 				log('error','EventMaster Error: '+ err);
 			});
 		}
-	}
-
-	else if (id == 'trans_all') {
+	}	else if (id == 'trans_all') {
 		log('info','Trans/Take All');
 
 		if (self.eventmaster !== undefined) {
@@ -219,11 +217,21 @@ instance.prototype.action = function(action) {
 				log('error','EventMaster Error: '+ err);
 			});
 		}
+	} else if (id == 'recall_next') {
+		log('info','recall_next');
+
+		if (self.eventmaster !== undefined) {
+			self.eventmaster.recallNextPreset(function(obj, res) {
+				debug('recall next response', res);
+			}).on('error', function(err) {
+				log('error','EventMaster Error: '+ err);
+			});
+		}
 	} else if (id == 'freeze') {
 		log('info', 'freeze');
 
 		if (self.eventmaster !== undefined) {
-			self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 1, function(obj, res) {
+			self.eventmaster.freezeDestSource(0, parseInt(opt.frzSource), 0, 1, function(obj, res) {
 				debug('freeze all response', res);
 			}).on('error', function(err) {
 				log('error', 'EventMaster Error: ' + err);
@@ -233,14 +241,13 @@ instance.prototype.action = function(action) {
 		log('info', 'unfreeze');
 
 		if (self.eventmaster !== undefined) {
-			self.eventmaster.cut(opt.typeSource, opt.inputId, 0, 0, function(obj, res) {
+			self.eventmaster.freezeDestSource(0, parseInt(opt.unfrzSource), 0, 0, function(obj, res) {
 				debug('unfreeze all response', res);
 			}).on('error', function(err) {
 				log('error', 'EventMaster Error: ' + err);
 			});
 		}
-}
-
+	}
 };
 
 instance.module_info = {
