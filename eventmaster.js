@@ -144,13 +144,13 @@ instance.prototype.updateChoices = function(arguments) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
 
 			if (res !== undefined) {
+				self.CHOICES_PRESETS = [];
+
 				for (var n in res) {
 					var preset = res[n];
 
 					self.CHOICES_PRESETS.push({ label: preset.Name, id: preset.id });
 				}
-
-				self.system.emit('instance_actions', self.id, actions);
 			}
 
 		}).on('error', function(err) {
@@ -160,6 +160,8 @@ instance.prototype.updateChoices = function(arguments) {
 		self.eventmaster.listSources(0, function(obj, res) {
 
 			if (res !== undefined) {
+				self.CHOICES_SOURCES = [];
+
 				for (var n in res) {
 
 					var source = res[n];
@@ -167,8 +169,6 @@ instance.prototype.updateChoices = function(arguments) {
 					self.CHOICES_SOURCES.push({ label: source.Name, id: source.id});
 				}
 			}
-
-			self.system.emit('instance_actions', self.id, actions);
 
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
