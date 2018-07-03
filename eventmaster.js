@@ -11,6 +11,43 @@ function instance(system, id, config) {
 	// super-constructor
 	instance_skel.apply(this, arguments);
 
+	// v0.0.* -> v0.0.4
+	self.addUpgradeScript(function (config, actions) {
+		// Presets were actions instead of choices
+		var changed = false;
+
+		for (var k in actions) {
+			var action = actions[k];
+
+			var actionid = action.action;
+			var match;
+
+			if (match = actionid.match(/^recall_preset_pvw_id_(\d+)/)) {
+				if (action.options === undefined) {
+					action.options = {};
+				}
+				action.options.preset_in_pvw = match[1];
+				action.action = 'preset_in_pvw';
+				action.label = self.id + ':' + action.action;
+
+				changed = true;
+			}
+
+			if (match = actionid.match(/^recall_preset_pgm_id_(\d+)/)) {
+				if (action.options === undefined) {
+					action.options = {};
+				}
+				action.options.preset_in_pgm = match[1];
+				action.action = 'preset_in_pgm';
+				action.label = self.id + ':' + action.action;
+
+				changed = true;
+			}
+		}
+
+		return changed;
+	});
+
 	return self;
 }
 
@@ -27,6 +64,8 @@ instance.prototype.init = function() {
 	self.ok = false;
 	self.retry_interval = setInterval(self.retry.bind(self), 15000);
 	self.retry();
+
+	self.actions();
 };
 
 instance.prototype.updateConfig = function(config) {
@@ -62,7 +101,7 @@ instance.prototype.retry = function() {
 		}
 	}
 
-	self.actions();
+	self.updateChoices();
 }
 
 // Return config fields for web config
@@ -98,52 +137,8 @@ instance.prototype.CHOICES_TYPEOFSOURCE = [
 	{ label: 'Aux destination',    id: '3' }
 ];
 
-instance.prototype.actions = function(system) {
+instance.prototype.updateChoices = function(arguments) {
 	var self = this;
-	self.CHOICES_PRESETS = [];
-	self.CHOICES_SOURCES = [];
-
-	var actions = {
-		'trans_all': { label: 'Take/Trans Active' },
-		'cut_all': { label: 'Cut Active' },
-		'recall_next': { label: 'Recall Next Preset' },
-		'freeze': {
-			label: 'Freeze',
-			options: [{
-				type: 'dropdown',
-				label: 'Source',
-				id: 'frzSource',
-				choices: self.CHOICES_SOURCES
-			}]
-		},
-		'unfreeze': {
-			label: 'Unfreeze',
-			options: [{
-				type: 'dropdown',
-				label: 'Source',
-				id: 'unfrzSource',
-				choices: self.CHOICES_SOURCES
-			}]
-		},
-		'Preset in PVW': {
-			label: 'Preset in PVW',
-			options: [{
-				type: 'dropdown',
-				label: 'Preset',
-				id: 'preset_in_pvw',
-				choices: self.CHOICES_PRESETS
-			}]
-		},
-		'Preset in PGM': {
-			label: 'Preset in PGM',
-			options: [{
-				type: 'dropdown',
-				label: 'Preset',
-				id: 'preset_in_pgm',
-				choices: self.CHOICES_PRESETS
-			}]
-		}
-	};
 
 	if (self.eventmaster !== undefined) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
@@ -179,6 +174,54 @@ instance.prototype.actions = function(system) {
 			log('error','EventMaster Error: '+ err);
 		});
 	}
+};
+
+instance.prototype.actions = function(system) {
+	var self = this;
+	self.CHOICES_PRESETS = [];
+	self.CHOICES_SOURCES = [];
+
+	var actions = {
+		'trans_all': { label: 'Take/Trans Active' },
+		'cut_all': { label: 'Cut Active' },
+		'recall_next': { label: 'Recall Next Preset' },
+		'freeze': {
+			label: 'Freeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Source',
+				id: 'frzSource',
+				choices: self.CHOICES_SOURCES
+			}]
+		},
+		'unfreeze': {
+			label: 'Unfreeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Source',
+				id: 'unfrzSource',
+				choices: self.CHOICES_SOURCES
+			}]
+		},
+		'preset_in_pvw': {
+			label: 'Preset in PVW',
+			options: [{
+				type: 'dropdown',
+				label: 'Preset',
+				id: 'preset_in_pvw',
+				choices: self.CHOICES_PRESETS
+			}]
+		},
+		'preset_in_pgm': {
+			label: 'Preset in PGM',
+			options: [{
+				type: 'dropdown',
+				label: 'Preset',
+				id: 'preset_in_pgm',
+				choices: self.CHOICES_PRESETS
+			}]
+		}
+	};
 
 	self.system.emit('instance_actions', self.id, actions);
 }
