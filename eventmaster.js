@@ -110,10 +110,26 @@ instance.prototype.actions = function(system) {
 		},
 		//next step would be to load the inputdata from JSON
 		'freeze': {
-			label: 'Freeze/Unfreeze',
+			label: 'Freeze',
 			options: [{
 				type: 'dropdown',
-				label: 'Type op source',
+				label: 'Type of source',
+				id: 'typeSource',
+				default: '0',
+				choices: self.CHOICES_TYPEOFSOURCE
+			}, {
+				type: 'textinput',
+				label: 'Input ID',
+				id: 'inputId',
+				default: '1',
+				regex: self.REGEX_NUMBER
+			}]
+		},
+		'unfreeze': {
+			label: 'Unfreeze',
+			options: [{
+				type: 'dropdown',
+				label: 'Type of source',
 				id: 'typeSource',
 				default: '0',
 				choices: self.CHOICES_TYPEOFSOURCE
@@ -163,6 +179,7 @@ instance.prototype.actions = function(system) {
 instance.prototype.action = function(action) {
 	var self = this;
 	var id = action.action;
+	var opt = action.options;
 
 	debug('run action:', id);
 	if (id.match(/^recall_preset_pvw_id_/)) {
