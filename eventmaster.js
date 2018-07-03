@@ -144,7 +144,7 @@ instance.prototype.updateChoices = function(arguments) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
 
 			if (res !== undefined) {
-				self.CHOICES_PRESETS = [];
+				self.CHOICES_PRESETS.length = 0;
 
 				for (var n in res) {
 					var preset = res[n];
@@ -160,7 +160,7 @@ instance.prototype.updateChoices = function(arguments) {
 		self.eventmaster.listSources(0, function(obj, res) {
 
 			if (res !== undefined) {
-				self.CHOICES_SOURCES = [];
+				self.CHOICES_SOURCES.length = 0;
 
 				for (var n in res) {
 
