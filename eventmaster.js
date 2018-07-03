@@ -95,6 +95,7 @@ instance.prototype.destroy = function() {
 instance.prototype.actions = function(system) {
 	var self = this;
 	self.CHOICES_SOURCES = [];
+	self.CHOICES_PRESETS = [];
 
 	if (self.eventmaster !== undefined) {
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
@@ -104,13 +105,11 @@ instance.prototype.actions = function(system) {
 
 					var preset = res[n];
 
-					var p_name = 'Recall preset in PVW: ' + preset.Name;
-					var pg_name = 'Recall preset in PGM: ' + preset.Name;
-					var	p_id = 'recall_preset_pvw_id_' + preset.id;
-					var	pg_id = 'recall_preset_pgm_id_' + preset.id;
+					var p_name = 'Recall preset: ' + preset.Name;
 
-					actions[p_id] = { label: p_name };
-					actions[pg_id] = { label: pg_name };
+					var	p_id = preset.id;
+
+					self.CHOICES_PRESETS.push({ label: p_name, id: p_id});
 
 				}
 			}
@@ -163,6 +162,24 @@ instance.prototype.actions = function(system) {
 				id: 'unfrzSource',
 				choices: self.CHOICES_SOURCES
 			}]
+		},
+		'Preset in PVW': {
+			label: 'Preset in PVW',
+			options: [{
+				type: 'dropdown',
+				label: 'Preset',
+				id: 'preset_in_pvw',
+				choices: self.CHOICES_PRESETS
+			}]
+		},
+		'Preset in PGM': {
+			label: 'Preset in PGM',
+			options: [{
+				type: 'dropdown',
+				label: 'Preset',
+				id: 'preset_in_pgm',
+				choices: self.CHOICES_PRESETS
+			}]
 		}
 	};
 }
@@ -172,31 +189,7 @@ instance.prototype.action = function(action) {
 	var id = action.action;
 	var opt = action.options;
 
-	debug('run action:', id);
-	if (id.match(/^recall_preset_pvw_id_/)) {
-		var ida = id.split(/_/);
-		var id = ida[4];
-		if (self.eventmaster !== undefined) {
-			log('info','Recall to PVW id:' + id)
-			self.eventmaster.activatePresetById(parseInt(id), 0, function(obj, res) {
-				debug('recall preset pvw response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	}
-	else if (id.match(/^recall_preset_pgm_id_/)) {
-		var ida = id.split(/_/);
-		var id = ida[4];
-		if (self.eventmaster !== undefined) {
-			log('info','Recall to PGM id:' + id)
-			self.eventmaster.activatePresetById(parseInt(id), 1, function(obj, res) {
-				debug('recall preset pgm response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	}	else if (id == 'trans_all') {
+	if (id == 'trans_all') {
 		log('info','Trans/Take All');
 
 		if (self.eventmaster !== undefined) {
@@ -245,6 +238,24 @@ instance.prototype.action = function(action) {
 				debug('unfreeze all response', res);
 			}).on('error', function(err) {
 				log('error', 'EventMaster Error: ' + err);
+			});
+		}
+	} else if (id == 'preset_in_pvw') {
+		if (self.eventmaster !== undefined) {
+			log('info','Recall to PVW id:' + id)
+			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
+				debug('recall preset pvw response', res);
+			}).on('error', function(err) {
+				log('error','EventMaster Error: '+ err);
+			});
+		}
+	} else if (id == 'preset_in_pgm') {
+		if (self.eventmaster !== undefined) {
+			log('info','Recall to PGM id:' + id)
+			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 0, function(obj, res) {
+				debug('recall preset pgm response', res);
+			}).on('error', function(err) {
+				log('error','EventMaster Error: '+ err);
 			});
 		}
 	}
