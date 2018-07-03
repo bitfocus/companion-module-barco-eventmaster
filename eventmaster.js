@@ -148,6 +148,8 @@ instance.prototype.actions = function(system) {
 					};
 
 				}
+
+				self.system.emit('instance_actions', self.id, actions);
 			}
 
 		}).on('error', function(err) {
