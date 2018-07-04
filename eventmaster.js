@@ -130,13 +130,6 @@ instance.prototype.destroy = function() {
 	debug("destroy");;
 };
 
-instance.prototype.CHOICES_TYPEOFSOURCE = [
-	{ label: 'Input',              id: '0' },
-	{ label: 'Background',         id: '1' },
-	{ label: 'Screen destination', id: '2' },
-	{ label: 'Aux destination',    id: '3' }
-];
-
 instance.prototype.updateChoices = function(arguments) {
 	var self = this;
 
@@ -295,7 +288,7 @@ instance.prototype.action = function(action) {
 	} else if (id == 'preset_in_pgm') {
 		if (self.eventmaster !== undefined) {
 			log('info','Recall to PGM id:' + id)
-			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 0, function(obj, res) {
+			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
 				debug('recall preset pgm response', res);
 			}).on('error', function(err) {
 				log('error','EventMaster Error: '+ err);
