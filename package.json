@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "William Viker",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "barco-eventmaster": "^5.1.0"
   }
