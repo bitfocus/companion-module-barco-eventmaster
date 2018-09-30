@@ -302,11 +302,5 @@ instance.prototype.action = function(action) {
 
 };
 
-instance.module_info = {
-	label: 'Barco EventMaster JSON',
-	id: 'eventmaster',
-	version: '0.0.4'
-};
-
 instance_skel.extendedBy(instance);
 exports = module.exports = instance;
