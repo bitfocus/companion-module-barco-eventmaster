@@ -57,6 +57,9 @@ instance.prototype.init = function() {
 	debug = self.debug;
 	log = self.log;
 
+	self.CHOICES_PRESETS = [];
+	self.CHOICES_SOURCES = [];
+
 	self.status(self.STATE_UNKNOWN);
 
 	debug('creating eventmaster');
@@ -66,6 +69,7 @@ instance.prototype.init = function() {
 	self.retry();
 
 	self.actions();
+	self.updateChoices()
 };
 
 instance.prototype.updateConfig = function(config) {
@@ -146,6 +150,7 @@ instance.prototype.updateChoices = function(arguments) {
 				}
 			}
 
+			self.actions();
 		}).on('error', function(err) {
 			log('error', 'EventMaster Error: ' + err);
 		});
@@ -163,6 +168,7 @@ instance.prototype.updateChoices = function(arguments) {
 				}
 			}
 
+			self.actions();
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
@@ -171,8 +177,6 @@ instance.prototype.updateChoices = function(arguments) {
 
 instance.prototype.actions = function(system) {
 	var self = this;
-	self.CHOICES_PRESETS = [];
-	self.CHOICES_SOURCES = [];
 
 	var actions = {
 		'trans_all': { label: 'Take/Trans Active' },
@@ -296,12 +300,6 @@ instance.prototype.action = function(action) {
 		}
 	}
 
-};
-
-instance.module_info = {
-	label: 'Barco EventMaster JSON',
-	id: 'eventmaster',
-	version: '0.0.4'
 };
 
 instance_skel.extendedBy(instance);
