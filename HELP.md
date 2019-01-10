@@ -12,3 +12,5 @@ This module uses the official EventMaster JSON API. Unfortunately the JSON API i
 * Unfreeze
 * Preset in PVW
 * Preset in PGM
+* activateCue
+* listCues

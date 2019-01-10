@@ -59,6 +59,7 @@ instance.prototype.init = function() {
 
 	self.CHOICES_PRESETS = [];
 	self.CHOICES_SOURCES = [];
+	self.CHOICES_CUES = [];
 
 	self.status(self.STATE_UNKNOWN);
 
@@ -172,6 +173,24 @@ instance.prototype.updateChoices = function(arguments) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
+
+		self.eventmaster.listCues(0, function(obj, res) {
+
+			if (res !== undefined) {
+				self.CHOICES_CUES.length = 0;
+
+				for (var n in res) {
+
+					var cue = res[n];
+
+					self.CHOICES_CUES.push({ label: cue.cueName, id: cue.id});
+				}
+			}
+
+			self.actions();
+		}).on('error', function(err) {
+			log('error','EventMaster Error: '+ err);
+		});
 	}
 };
 
@@ -216,6 +235,24 @@ instance.prototype.actions = function(system) {
 				label: 'Preset',
 				id: 'preset_in_pgm',
 				choices: self.CHOICES_PRESETS
+			}]
+		},
+		'play_cue': {
+			label: 'Play cue',
+			options: [{
+				type: 'dropdown',
+				label: 'cue',
+				id: 'cueNumber',
+				choices: self.CHOICES_CUES
+			}]
+		},
+		'stop_cue': {
+			label: 'Stop cue',
+			options: [{
+				type: 'dropdown',
+				label: 'cue',
+				id: 'cueNumber',
+				choices: self.CHOICES_CUES
 			}]
 		}
 	};
@@ -298,10 +335,28 @@ instance.prototype.action = function(action) {
 				log('error','EventMaster Error: '+ err);
 			});
 		}
+	} else if (id == 'play_cue') {
+		if (self.eventmaster !== undefined) {
+			log('info','play_cue:' + id)
+			self.eventmaster.activateCue(parseInt(opt.play_cue), 0, function(obj, res) {
+				debug('activateCue response', res);
+			}).on('error', function(err) {
+				log('error','EventMaster Error: '+ err);
+			});
+		}
+	} else if (id == 'stop_cue') {
+		if (self.eventmaster !== undefined) {
+			log('info','play_cue:' + id)
+			self.eventmaster.activateCue(parseInt(opt.stop_cue), 2, function(obj, res) {
+				debug('activateCue response', res);
+			}).on('error', function(err) {
+				log('error','EventMaster Error: '+ err);
+			});
+		}
 	}
 
 };
-
+/* not able to test during lack of machine
 instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
@@ -326,7 +381,7 @@ instance.prototype.init_presets = function (updates) {
 				}]
 			})
 	}
-});
+};*/
 
 instance_skel.extendedBy(instance);
 exports = module.exports = instance;
