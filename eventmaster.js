@@ -357,5 +357,32 @@ instance.prototype.action = function(action) {
 
 };
 
+// not able to test during lack of machine
+instance.prototype.init_presets = function (updates) {
+	var self = this;
+	var presets = [];
+
+	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
+			presets.push({
+				category: 'Presets',
+				label: '$(select preset for ' + self.CHOICES[preset].label +')',
+				bank: {
+					style: 'text',
+					text: '$(preset for ' + self.CHOICES[preset].label +')',
+					size: '24',
+					color: '16777215',
+					bgcolor: self.rgb(0,255,0)
+				},
+				actions: [
+				{
+					action: 'preset_in_pvw',
+					options: {
+						preset_in_pvw: preset
+					}
+				}]
+			})
+	}
+};
+
 instance_skel.extendedBy(instance);
 exports = module.exports = instance;
