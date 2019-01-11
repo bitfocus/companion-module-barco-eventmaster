@@ -346,7 +346,7 @@ instance.prototype.action = function(action) {
 		}
 	} else if (id == 'stop_cue') {
 		if (self.eventmaster !== undefined) {
-			log('info','play_cue:' + id)
+			log('info','stop_cue:' + id)
 			self.eventmaster.activateCue(parseInt(opt.stop_cue), 2, function(obj, res) {
 				debug('activateCue response', res);
 			}).on('error', function(err) {
