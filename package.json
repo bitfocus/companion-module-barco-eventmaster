@@ -15,6 +15,6 @@
   "author": "William Viker <william@bitfocus.io>",
   "license": "MIT",
   "dependencies": {
-    "barco-eventmaster": "^5.1.0"
+    "barco-eventmaster": "6.2.0"
   }
 }

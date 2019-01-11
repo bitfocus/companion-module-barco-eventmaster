@@ -14,3 +14,4 @@ This module uses the official EventMaster JSON API. Unfortunately the JSON API i
 * Preset in PGM
 * activateCue
 * listCues
+* control3d
