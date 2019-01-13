@@ -357,7 +357,7 @@ instance.prototype.action = function(action) {
 
 };
 
-// not able to test during lack of machine
+// not able to test during lack of machine, go for it
 instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
