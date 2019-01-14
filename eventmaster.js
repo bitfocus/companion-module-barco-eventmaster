@@ -371,7 +371,7 @@ instance.prototype.init_presets = function (updates) {
 		bank: {
 			style: 'text',
 			text: 'preset 1',
-			size: '24',
+			size: 'auto',
 			color: '16777215',
 			bgcolor: self.rgb(255,0,255)
 		},
@@ -391,7 +391,7 @@ instance.prototype.init_presets = function (updates) {
 				bank: {
 					style: 'text',
 					text: '$(preset for ' + self.CHOICES_PRESETS[preset].label +')',
-					size: '24',
+					size: 'auto',
 					color: '16777215',
 					bgcolor: self.rgb(255,0,255)
 				},
