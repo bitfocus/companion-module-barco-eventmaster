@@ -70,13 +70,15 @@ instance.prototype.init = function() {
 	self.retry();
 
 	self.actions();
-	self.updateChoices()
+	self.updateChoices();
+	self.init_presets();
 };
 
 instance.prototype.updateConfig = function(config) {
 	var self = this;
 
 	self.config = config;
+	self.init_presets();
 };
 
 instance.prototype.retry = function() {
@@ -365,10 +367,10 @@ instance.prototype.init_presets = function (updates) {
 	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
 			presets.push({
 				category: 'Presets',
-				label: '$(select preset for ' + self.CHOICES[preset].label +')',
+				label: '$(select preset for ' + self.CHOICES_PRESETS[preset].label +')',
 				bank: {
 					style: 'text',
-					text: '$(preset for ' + self.CHOICES[preset].label +')',
+					text: '$(# ' + self.CHOICES_PRESETS[preset].label +')',
 					size: '24',
 					color: '16777215',
 					bgcolor: self.rgb(0,255,0)
