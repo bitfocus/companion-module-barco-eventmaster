@@ -177,7 +177,7 @@ instance.prototype.updateChoices = function(arguments) {
 			log('error','EventMaster Error: '+ err);
 		});
 
-		self.eventmaster.listCues(0, function(obj, res) {
+		self.eventmaster.listCues(function(obj, res) {
 
 			if (res !== undefined) {
 				self.CHOICES_CUES.length = 0;
