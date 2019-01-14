@@ -77,6 +77,7 @@ instance.prototype.init = function() {
 instance.prototype.updateConfig = function(config) {
 	var self = this;
 
+	self.init_tcp();
 	self.config = config;
 	self.init_presets();
 };
@@ -359,21 +360,40 @@ instance.prototype.action = function(action) {
 
 };
 
-// not able to test during lack of machine, go for it
+// not able to test during lack of machine
 instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
 
+	presets.push({
+		category: 'Presets',
+		label: 'Select preset for ',
+		bank: {
+			style: 'text',
+			text: 'preset 1',
+			size: '24',
+			color: '16777215',
+			bgcolor: self.rgb(255,0,255)
+		},
+		actions: [
+		{
+			action: 'preset_in_pvw',
+			options: {
+				preset_in_pvw: 1
+			}
+		}]
+	})
+
 	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
 			presets.push({
 				category: 'Presets',
-				label: '$(select preset for ' + self.CHOICES_PRESETS[preset].label +')',
+				label: '$(select preset for ' + self.CHOICES[preset].label +')',
 				bank: {
 					style: 'text',
-					text: '$(# ' + self.CHOICES_PRESETS[preset].label +')',
+					text: '$(preset for ' + self.CHOICES[preset].label +')',
 					size: '24',
 					color: '16777215',
-					bgcolor: self.rgb(0,255,0)
+					bgcolor: self.rgb(255,0,255)
 				},
 				actions: [
 				{
@@ -384,6 +404,7 @@ instance.prototype.init_presets = function (updates) {
 				}]
 			})
 	}
+	self.setPresetDefinitions(presets);
 };
 
 instance_skel.extendedBy(instance);
