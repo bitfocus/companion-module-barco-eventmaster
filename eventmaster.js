@@ -365,9 +365,9 @@ instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
 
+	// EXamples for test only
 	presets.push({
 		category: 'Presets',
-		label: 'Select preset for ',
 		bank: {
 			style: 'text',
 			text: 'preset 1',
@@ -383,7 +383,25 @@ instance.prototype.init_presets = function (updates) {
 			}
 		}]
 	})
+	presets.push({
+		category: 'Cues',
+		bank: {
+			style: 'text',
+			text: 'cue 1',
+			size: 'auto',
+			color: '16777215',
+			bgcolor: self.rgb(255,0,255)
+		},
+		actions: [
+		{
+			action: 'play_cue',
+			options: {
+				cueNumber: 1
+			}
+		}]
+	})
 
+	//Load presets from eventmaster into presets from companion
 	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
 			presets.push({
 				category: 'Presets',
@@ -400,6 +418,28 @@ instance.prototype.init_presets = function (updates) {
 					action: 'preset_in_pvw',
 					options: {
 						preset_in_pvw: preset
+					}
+				}]
+			})
+	}
+
+	//Load cues from eventmaster into presets from companion
+	for (var cue = 0; cue < self.CHOICES_CUES; ++cue) {
+			presets.push({
+				category: 'Cues',
+				label: '$(select cue for ' + self.CHOICES_CUES[cue].label +')',
+				bank: {
+					style: 'text',
+					text: '$(cue for ' + self.CHOICES_CUES[cue].label +')',
+					size: 'auto',
+					color: '16777215',
+					bgcolor: self.rgb(255,0,255)
+				},
+				actions: [
+				{
+					action: 'play_cue',
+					options: {
+						cueNumber: cue
 					}
 				}]
 			})
