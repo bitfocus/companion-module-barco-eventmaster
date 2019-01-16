@@ -360,8 +360,9 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'preset_in_pvw':
+			log('info','Recall to PVW id:' + opt.preset_in_pvw);
+
 			if (self.eventmaster !== undefined) {
-				log('info','Recall to PVW id:' + id)
 				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
 					debug('recall preset pvw response', res);
 				}).on('error', function(err) {
@@ -370,8 +371,9 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'preset_in_pgm':
+			log('info','Recall to PGM id:' + opt.preset_in_pgm);
+
 			if (self.eventmaster !== undefined) {
-				log('info','Recall to PGM id:' + id)
 				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
 					debug('recall preset pgm response', res);
 				}).on('error', function(err) {
@@ -380,9 +382,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'play_cue':
+			log('info','play_cue:' + opt.cueNumber);
+
 			if (self.eventmaster !== undefined) {
-				log('info','play_cue:' + id)
-				self.eventmaster.activateCueById(parseInt(opt.play_cue), 0, function(obj, res) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 0, function(obj, res) {
 					debug('activateCue response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
@@ -390,9 +393,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'stop_cue':
+			log('info','stop_cue:' + opt.cueNumber);
+
 			if (self.eventmaster !== undefined) {
-				log('info','stop_cue:' + id)
-				self.eventmaster.activateCueById(parseInt(opt.stop_cue), 2, function(obj, res) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 2, function(obj, res) {
 					debug('activateCue response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
@@ -400,9 +404,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'change_aux':
+			log('info', 'change_aux, source: ${opt.source} destination ${opt.auxdestination}');
+
 			if (self.eventmaster !== undefined) {
-				log('info','change_aux:' + id)
-				self.eventmaster.changeAuxContent(parseInt(opt.source), -1, opt.auxdestination, function(obj, res) {
+				self.eventmaster.changeAuxContent(parseInt(opt.source), -1, parseInt(opt.auxdestination), function(obj, res) {
 					debug('changeAuxContent response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
@@ -412,12 +417,11 @@ instance.prototype.action = function(action) {
 	}
 };
 
-// not able to test during lack of machine
 instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
 
-	// EXamples for test only
+	// Examples for test only
 	presets.push({
 		category: 'Presets',
 		bank: {
