@@ -1,10 +1,16 @@
 {
 	"name": "eventmaster",
-	"version": "1.2.2",
+	"version": "1.2.3",
 	"api_version": "1.0.0",
-	"keywords": [ "Protocol", "Image Processing", "Barco" ],
+	"keywords": [
+		"Image Processing",
+		"e2",
+		"s3"
+	],
 	"manufacturer": "Barco",
-	"product": "Event Master",
+	"product": [
+		"Event Master"
+	],
 	"shortname": "eventmaster",
 	"homepage": "https://www.barco.com/en/page/event-master",
 	"description": "Barco EventMaster plugin for Companion",
