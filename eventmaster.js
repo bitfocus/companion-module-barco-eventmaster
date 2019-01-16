@@ -382,10 +382,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'play_cue':
-			log('info','play_cue:' + opt.play_cue);
+			log('info','play_cue:' + opt.cueNumber);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.activateCueById(parseInt(opt.play_cue), 0, function(obj, res) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 0, function(obj, res) {
 					debug('activateCue response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
@@ -393,10 +393,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'stop_cue':
-			log('info','stop_cue:' + opt.stop_cue);
+			log('info','stop_cue:' + opt.cueNumber);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.activateCueById(parseInt(opt.stop_cue), 2, function(obj, res) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 2, function(obj, res) {
 					debug('activateCue response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
