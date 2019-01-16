@@ -187,7 +187,7 @@ instance.prototype.updateChoices = function(arguments) {
 
 					var cue = res[n];
 
-					self.CHOICES_CUES.push({ label: cue.cueName, id: cue.id});
+					self.CHOICES_CUES.push({ label: cue.Name, id: cue.id});
 				}
 			}
 
