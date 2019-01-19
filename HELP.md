@@ -12,6 +12,11 @@ This module uses the official EventMaster JSON API. Unfortunately the JSON API i
 * Unfreeze
 * Preset in PVW
 * Preset in PGM
-* activateCue
-* listCues
-* control3d
+**Below functions, not Tested yet on live machine (JSON)**
+* Play Cue
+* Stop Cue
+* Change content of AUX Destinations
+
+**Presets are available for**
+* Presets
+* Cues

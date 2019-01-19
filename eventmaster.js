@@ -60,6 +60,7 @@ instance.prototype.init = function() {
 	self.CHOICES_PRESETS = [];
 	self.CHOICES_SOURCES = [];
 	self.CHOICES_CUES = [];
+	self.CHOICES_AUXDESTINATIONS = [];
 
 	self.status(self.STATE_UNKNOWN);
 
@@ -70,13 +71,16 @@ instance.prototype.init = function() {
 	self.retry();
 
 	self.actions();
-	self.updateChoices()
+	self.updateChoices();
+	self.init_presets();
 };
 
 instance.prototype.updateConfig = function(config) {
 	var self = this;
 
+	self.init_tcp();
 	self.config = config;
+	self.init_presets();
 };
 
 instance.prototype.retry = function() {
@@ -174,7 +178,7 @@ instance.prototype.updateChoices = function(arguments) {
 			log('error','EventMaster Error: '+ err);
 		});
 
-		self.eventmaster.listCues(0, function(obj, res) {
+		self.eventmaster.listCues(function(obj, res) {
 
 			if (res !== undefined) {
 				self.CHOICES_CUES.length = 0;
@@ -183,7 +187,26 @@ instance.prototype.updateChoices = function(arguments) {
 
 					var cue = res[n];
 
-					self.CHOICES_CUES.push({ label: cue.cueName, id: cue.id});
+					self.CHOICES_CUES.push({ label: cue.Name, id: cue.id});
+				}
+			}
+
+			self.actions();
+		}).on('error', function(err) {
+			log('error','EventMaster Error: '+ err);
+		});
+
+		//Only get type 2 destinations (AUX)
+		self.eventmaster.listDestinations(2, function(obj, res) {
+
+			if (res !== undefined) {
+				self.CHOICES_AUXDESTINATIONS.length = 0;
+
+				for (var n in res) {
+
+					var auxDest = res[n];
+
+					self.CHOICES_AUXDESTINATIONS.push({ label: auxDest.Name, id: auxDest.id});
 				}
 			}
 
@@ -254,6 +277,20 @@ instance.prototype.actions = function(system) {
 				id: 'cueNumber',
 				choices: self.CHOICES_CUES
 			}]
+		},
+		'change_aux': {
+			label: 'Change aux on destination',
+			options: [{
+				type: 'dropdown',
+				label: 'Source',
+				id: 'source',
+				choices: self.CHOICES_SOURCES
+			},{
+				type: 'dropdown',
+				label: 'Destination',
+				id: 'auxdestination',
+				choices: self.CHOICES_AUXDESTINATIONS
+			}]
 		}
 	};
 
@@ -266,112 +303,170 @@ instance.prototype.action = function(action) {
 	var opt = action.options;
 
 	debug('run action:', id);
-	if (id == 'trans_all') {
-		log('info','Trans/Take All');
+	switch(id) {
+		case 'trans_all':
+			log('info','Trans/Take All');
 
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.allTrans(function(obj, res) {
-				debug('trans all response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.allTrans(function(obj, res) {
+					debug('trans all response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'cut_all':
+			log('info','Cut All');
 
-		}
-	}	else if (id == 'cut_all') {
-		log('info','Cut All');
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.cut(function(obj, res) {
+					debug('cut all response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'recall_next':
+			log('info','recall_next');
 
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.cut(function(obj, res) {
-				debug('cut all response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	} else if (id == 'recall_next') {
-		log('info','recall_next');
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.recallNextPreset(function(obj, res) {
+					debug('recall next response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'freeze':
+			log('info', 'freeze');
 
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.recallNextPreset(function(obj, res) {
-				debug('recall next response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	} else if (id == 'freeze') {
-		log('info', 'freeze');
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.freezeDestSource(0, parseInt(opt.frzSource), 0, 1, function(obj, res) {
+					debug('freeze all response', res);
+				}).on('error', function(err) {
+					log('error', 'EventMaster Error: ' + err);
+				});
+			}
+			break;
+		case 'unfreeze':
+			log('info', 'unfreeze');
 
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.freezeDestSource(0, parseInt(opt.frzSource), 0, 1, function(obj, res) {
-				debug('freeze all response', res);
-			}).on('error', function(err) {
-				log('error', 'EventMaster Error: ' + err);
-			});
-		}
-	} else if (id == 'unfreeze') {
-		log('info', 'unfreeze');
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.freezeDestSource(0, parseInt(opt.unfrzSource), 0, 0, function(obj, res) {
+					debug('unfreeze all response', res);
+				}).on('error', function(err) {
+					log('error', 'EventMaster Error: ' + err);
+				});
+			}
+			break;
+		case 'preset_in_pvw':
+			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
-		if (self.eventmaster !== undefined) {
-			self.eventmaster.freezeDestSource(0, parseInt(opt.unfrzSource), 0, 0, function(obj, res) {
-				debug('unfreeze all response', res);
-			}).on('error', function(err) {
-				log('error', 'EventMaster Error: ' + err);
-			});
-		}
-	} else if (id == 'preset_in_pvw') {
-		if (self.eventmaster !== undefined) {
-			log('info','Recall to PVW id:' + id)
-			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
-				debug('recall preset pvw response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	} else if (id == 'preset_in_pgm') {
-		if (self.eventmaster !== undefined) {
-			log('info','Recall to PGM id:' + id)
-			self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
-				debug('recall preset pgm response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	} else if (id == 'play_cue') {
-		if (self.eventmaster !== undefined) {
-			log('info','play_cue:' + id)
-			self.eventmaster.activateCue(parseInt(opt.play_cue), 0, function(obj, res) {
-				debug('activateCue response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
-	} else if (id == 'stop_cue') {
-		if (self.eventmaster !== undefined) {
-			log('info','stop_cue:' + id)
-			self.eventmaster.activateCue(parseInt(opt.stop_cue), 2, function(obj, res) {
-				debug('activateCue response', res);
-			}).on('error', function(err) {
-				log('error','EventMaster Error: '+ err);
-			});
-		}
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
+					debug('recall preset pvw response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'preset_in_pgm':
+			log('info','Recall to PGM id:' + opt.preset_in_pgm);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
+					debug('recall preset pgm response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'play_cue':
+			log('info','play_cue:' + opt.cueNumber);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 0, function(obj, res) {
+					debug('activateCue response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'stop_cue':
+			log('info','stop_cue:' + opt.cueNumber);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.activateCueById(parseInt(opt.cueNumber), 2, function(obj, res) {
+					debug('activateCue response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		case 'change_aux':
+			log('info', 'change_aux, source: ${opt.source} destination ${opt.auxdestination}');
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.changeAuxContent(parseInt(opt.source), -1, parseInt(opt.auxdestination), function(obj, res) {
+					debug('changeAuxContent response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
 	}
-
 };
 
-// not able to test during lack of machine
 instance.prototype.init_presets = function (updates) {
 	var self = this;
 	var presets = [];
 
+	// Examples for test only
+	presets.push({
+		category: 'Presets',
+		bank: {
+			style: 'text',
+			text: 'preset 1',
+			size: 'auto',
+			color: '16777215',
+			bgcolor: self.rgb(255,0,255)
+		},
+		actions: [
+		{
+			action: 'preset_in_pvw',
+			options: {
+				preset_in_pvw: 1
+			}
+		}]
+	})
+	presets.push({
+		category: 'Cues',
+		bank: {
+			style: 'text',
+			text: 'cue 1',
+			size: 'auto',
+			color: '16777215',
+			bgcolor: self.rgb(255,0,255)
+		},
+		actions: [
+		{
+			action: 'play_cue',
+			options: {
+				cueNumber: 1
+			}
+		}]
+	})
+
+	//Load presets from eventmaster into presets from companion
 	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
 			presets.push({
 				category: 'Presets',
-				label: '$(select preset for ' + self.CHOICES[preset].label +')',
 				bank: {
 					style: 'text',
-					text: '$(preset for ' + self.CHOICES[preset].label +')',
-					size: '24',
+					text: '$(preset for ' + self.CHOICES_PRESETS[preset].label +')',
+					size: 'auto',
 					color: '16777215',
-					bgcolor: self.rgb(0,255,0)
+					bgcolor: self.rgb(255,0,255)
 				},
 				actions: [
 				{
@@ -382,6 +477,28 @@ instance.prototype.init_presets = function (updates) {
 				}]
 			})
 	}
+
+	//Load cues from eventmaster into presets from companion
+	for (var cue = 0; cue < self.CHOICES_CUES; ++cue) {
+			presets.push({
+				category: 'Cues',
+				bank: {
+					style: 'text',
+					text: '$(cue for ' + self.CHOICES_CUES[cue].label +')',
+					size: 'auto',
+					color: '16777215',
+					bgcolor: self.rgb(255,0,255)
+				},
+				actions: [
+				{
+					action: 'play_cue',
+					options: {
+						cueNumber: cue
+					}
+				}]
+			})
+	}
+	self.setPresetDefinitions(presets);
 };
 
 instance_skel.extendedBy(instance);
