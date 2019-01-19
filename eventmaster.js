@@ -77,8 +77,6 @@ instance.prototype.init = function() {
 
 instance.prototype.updateConfig = function(config) {
 	var self = this;
-
-	self.init_tcp();
 	self.config = config;
 	self.init_presets();
 };
