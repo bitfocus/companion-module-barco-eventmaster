@@ -2,7 +2,10 @@
 	"name": "eventmaster",
 	"version": "1.2.1",
 	"api_version": "1.0.0",
-	"keywords": [ "Protocol", "Image Processing", "Barco" ],
+	"keywords": [
+		"Protocol",
+		"Image Processing"
+	],
 	"manufacturer": "Barco",
 	"product": "Event Master",
 	"shortname": "eventmaster",
@@ -10,11 +13,11 @@
 	"description": "Barco EventMaster plugin for Companion",
 	"main": "eventmaster.js",
 	"scripts": {
-	  "test": "echo \"Error: no test specified\" && exit 1"
+		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"author": "William Viker <william@bitfocus.io>",
 	"license": "MIT",
 	"dependencies": {
-	  "barco-eventmaster": "6.2.0"
+		"barco-eventmaster": "6.2.1"
 	}
 }
