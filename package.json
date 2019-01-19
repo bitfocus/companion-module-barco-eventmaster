@@ -3,9 +3,8 @@
 	"version": "1.2.3",
 	"api_version": "1.0.0",
 	"keywords": [
-		"Image Processing",
-		"e2",
-		"s3"
+		"Protocol",
+		"Image Processing"
 	],
 	"manufacturer": "Barco",
 	"product": [
@@ -21,6 +20,6 @@
 	"author": "William Viker <william@bitfocus.io>",
 	"license": "MIT",
 	"dependencies": {
-		"barco-eventmaster": "6.2.0"
+		"barco-eventmaster": "6.2.1"
 	}
 }
