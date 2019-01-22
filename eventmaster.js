@@ -72,13 +72,14 @@ instance.prototype.init = function() {
 
 	self.actions();
 	self.updateChoices();
-	self.init_presets();
+	self.initPresets();
 };
 
 instance.prototype.updateConfig = function(config) {
 	var self = this;
 	self.config = config;
-	self.init_presets();
+	self.updateChoices();
+	self.initPresets();
 };
 
 instance.prototype.retry = function() {
@@ -109,6 +110,7 @@ instance.prototype.retry = function() {
 	}
 
 	self.updateChoices();
+	self.initPresets();
 }
 
 // Return config fields for web config
@@ -193,7 +195,7 @@ instance.prototype.updateChoices = function(arguments) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
-
+		/* Not ready yet
 		//Only get type 2 destinations (AUX)
 		self.eventmaster.listDestinations(2, function(obj, res) {
 
@@ -212,6 +214,7 @@ instance.prototype.updateChoices = function(arguments) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
+		*/
 	}
 };
 
@@ -275,7 +278,7 @@ instance.prototype.actions = function(system) {
 				id: 'cueNumber',
 				choices: self.CHOICES_CUES
 			}]
-		},
+		}/* Not ready yet,
 		'change_aux': {
 			label: 'Change aux on destination',
 			options: [{
@@ -289,7 +292,7 @@ instance.prototype.actions = function(system) {
 				id: 'auxdestination',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
-		}
+		}*/
 	};
 
 	self.system.emit('instance_actions', self.id, actions);
@@ -415,53 +418,17 @@ instance.prototype.action = function(action) {
 	}
 };
 
-instance.prototype.init_presets = function (updates) {
+instance.prototype.initPresets = function (updates) {
 	var self = this;
 	var presets = [];
 
-	// Examples for test only
-	presets.push({
-		category: 'Presets',
-		bank: {
-			style: 'text',
-			text: 'preset 1',
-			size: 'auto',
-			color: '16777215',
-			bgcolor: self.rgb(255,0,255)
-		},
-		actions: [
-		{
-			action: 'preset_in_pvw',
-			options: {
-				preset_in_pvw: 1
-			}
-		}]
-	})
-	presets.push({
-		category: 'Cues',
-		bank: {
-			style: 'text',
-			text: 'cue 1',
-			size: 'auto',
-			color: '16777215',
-			bgcolor: self.rgb(255,0,255)
-		},
-		actions: [
-		{
-			action: 'play_cue',
-			options: {
-				cueNumber: 1
-			}
-		}]
-	})
-
 	//Load presets from eventmaster into presets from companion
-	for (var preset = 0; preset < self.CHOICES_PRESETS; ++preset) {
+	for (var preset in self.CHOICES_PRESETS) {
 			presets.push({
 				category: 'Presets',
 				bank: {
 					style: 'text',
-					text: '$(preset for ' + self.CHOICES_PRESETS[preset].label +')',
+					text: self.CHOICES_PRESETS[preset].label,
 					size: 'auto',
 					color: '16777215',
 					bgcolor: self.rgb(255,0,255)
@@ -477,12 +444,12 @@ instance.prototype.init_presets = function (updates) {
 	}
 
 	//Load cues from eventmaster into presets from companion
-	for (var cue = 0; cue < self.CHOICES_CUES; ++cue) {
+	for (var cue in self.CHOICES_CUES) {
 			presets.push({
 				category: 'Cues',
 				bank: {
 					style: 'text',
-					text: '$(cue for ' + self.CHOICES_CUES[cue].label +')',
+					text: self.CHOICES_CUES[cue].label,
 					size: 'auto',
 					color: '16777215',
 					bgcolor: self.rgb(255,0,255)
