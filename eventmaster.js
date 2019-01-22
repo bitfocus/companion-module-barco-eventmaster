@@ -143,6 +143,7 @@ instance.prototype.updateChoices = function(arguments) {
 	var self = this;
 
 	if (self.eventmaster !== undefined) {
+
 		self.eventmaster.listPresets(-1, -1, function(obj, res) {
 
 			if (res !== undefined) {
@@ -195,18 +196,17 @@ instance.prototype.updateChoices = function(arguments) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
-		/* Not ready yet
-		//Only get type 2 destinations (AUX)
-		self.eventmaster.listDestinations(2, function(obj, res) {
+
+		self.eventmaster.listDestinations(0, function(obj, res) {
 
 			if (res !== undefined) {
+				var auxes = res.AuxDestination;
 				self.CHOICES_AUXDESTINATIONS.length = 0;
 
-				for (var n in res) {
+				for (var n in auxes) {
 
-					var auxDest = res[n];
-
-					self.CHOICES_AUXDESTINATIONS.push({ label: auxDest.Name, id: auxDest.id});
+					var dest = auxes[n];
+					self.CHOICES_AUXDESTINATIONS.push({ label: dest.Name, id: dest.id });
 				}
 			}
 
@@ -214,7 +214,6 @@ instance.prototype.updateChoices = function(arguments) {
 		}).on('error', function(err) {
 			log('error','EventMaster Error: '+ err);
 		});
-		*/
 	}
 };
 
@@ -278,7 +277,7 @@ instance.prototype.actions = function(system) {
 				id: 'cueNumber',
 				choices: self.CHOICES_CUES
 			}]
-		}/* Not ready yet,
+		},
 		'change_aux': {
 			label: 'Change aux on destination',
 			options: [{
@@ -292,9 +291,10 @@ instance.prototype.actions = function(system) {
 				id: 'auxdestination',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
-		}*/
+		}
 	};
 
+	//setActions(actions);
 	self.system.emit('instance_actions', self.id, actions);
 }
 
@@ -405,10 +405,10 @@ instance.prototype.action = function(action) {
 			}
 			break;
 		case 'change_aux':
-			log('info', 'change_aux, source: ${opt.source} destination ${opt.auxdestination}');
+			log('info', `change_aux, source: ${opt.source} destination ${opt.auxdestination}`);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.changeAuxContent(parseInt(opt.source), -1, parseInt(opt.auxdestination), function(obj, res) {
+				self.eventmaster.changeAuxContent(parseInt(opt.auxdestination), -1, parseInt(opt.source), function(obj, res) {
 					debug('changeAuxContent response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
