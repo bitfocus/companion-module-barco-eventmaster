@@ -425,19 +425,39 @@ instance.prototype.initPresets = function (updates) {
 	//Load presets from eventmaster into presets from companion
 	for (var preset in self.CHOICES_PRESETS) {
 			presets.push({
-				category: 'Presets',
+				category: 'Presets to PVW',
 				bank: {
 					style: 'text',
 					text: self.CHOICES_PRESETS[preset].label,
-					size: 'auto',
-					color: '16777215',
-					bgcolor: self.rgb(255,0,255)
+					size: '14',
+					color: self.rgb(0,0,0),
+					bgcolor: self.rgb(235,235,235)
 				},
 				actions: [
 				{
 					action: 'preset_in_pvw',
 					options: {
-						preset_in_pvw: preset
+						preset_in_pvw: self.CHOICES_PRESETS[preset].id
+					}
+				}]
+			})
+	}
+
+	for (var presetPGM in self.CHOICES_PRESETS) {
+			presets.push({
+				category: 'Presets to PGM',
+				bank: {
+					style: 'text',
+					text: self.CHOICES_PRESETS[presetPGM].label,
+					size: '14',
+					color: self.rgb(255,0,0),
+					bgcolor: self.rgb(235,235,235)
+				},
+				actions: [
+				{
+					action: 'preset_in_pgm',
+					options: {
+						preset_in_pgm: self.CHOICES_PRESETS[presetPGM].id
 					}
 				}]
 			})
@@ -450,9 +470,9 @@ instance.prototype.initPresets = function (updates) {
 				bank: {
 					style: 'text',
 					text: self.CHOICES_CUES[cue].label,
-					size: 'auto',
-					color: '16777215',
-					bgcolor: self.rgb(255,0,255)
+					size: '14',
+					color: self.rgb(0,0,0),
+					bgcolor: self.rgb(66,244,226)
 				},
 				actions: [
 				{
