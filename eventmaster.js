@@ -61,6 +61,12 @@ instance.prototype.init = function() {
 	self.CHOICES_SOURCES = [];
 	self.CHOICES_CUES = [];
 	self.CHOICES_AUXDESTINATIONS = [];
+	self.CHOICES_SCREENDESTINATIONS = [];
+	self.CHOICES_TESTPATTERN = [
+		{ label: 'Pattern 1', id: '1'},
+		{ label: 'Pattern 2', id: '2'},
+		{ label: 'Pattern 3', id: '3'}
+	];
 
 	self.status(self.STATE_UNKNOWN);
 
@@ -200,8 +206,17 @@ instance.prototype.updateChoices = function(arguments) {
 		self.eventmaster.listDestinations(0, function(obj, res) {
 
 			if (res !== undefined) {
+				var screenDestinations = res.ScreenDestination;
 				var auxes = res.AuxDestination;
+
+				self.CHOICES_SCREENDESTINATIONS.length = 0;
 				self.CHOICES_AUXDESTINATIONS.length = 0;
+
+				for (var n in screenDestinations) {
+
+					var dest = screenDestinations[n];
+					self.CHOICES_SCREENDESTINATIONS.push({ label: dest.Name, id: dest.id });
+				}
 
 				for (var n in auxes) {
 
@@ -288,13 +303,56 @@ instance.prototype.actions = function(system) {
 			},{
 				type: 'dropdown',
 				label: 'Destination',
-				id: 'auxdestination',
+				id: 'auxDestination',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
 		}
+		/* only available on software not yet published/tested
+		'testpattern_on_AUX': {
+			label: 'Set testpattern for AUX',
+			options: [{
+				type: 'dropdown',
+				label: 'aux destination',
+				id: 'auxDestination',
+				choices: self.CHOICES_AUXDESTINATIONS
+			},{
+				type: 'dropdown',
+				label: 'Type number',
+				id: 'testPattern',
+				choices: self.CHOICES_TESTPATTERN
+			}]
+		},
+		'testpattern_on_SCREEN': {
+			label: 'Set testpattern for screen destinations',
+			options: [{
+				type: 'dropdown',
+				label: 'destination',
+				id: 'screenDestination',
+				choices: self.CHOICES_SCREENDESTINATIONS
+			},{
+				type: 'dropdown',
+				label: 'Type number',
+				id: 'testPattern',
+				choices: self.CHOICES_TESTPATTERN
+			}]
+		},
+		'armUnarmDestination': {
+			label: 'arm destinations',
+			options: [{
+				type: 'dropdown',
+				label: 'arm/un-arm',
+				id: 'armUnarm',
+				choices: [{ label: 'arm', id: 1},{ label: 'disarm', id: 0}]
+			},{
+				type: 'dropdown',
+				label: 'destination',
+				id: 'screenDestination',
+				choices: self.CHOICES_SCREENDESTINATIONS
+			}]
+		} */
 	};
 
-	//setActions(actions);
+	//self.setActions(actions);
 	self.system.emit('instance_actions', self.id, actions);
 }
 
@@ -305,6 +363,7 @@ instance.prototype.action = function(action) {
 
 	debug('run action:', id);
 	switch(id) {
+
 		case 'trans_all':
 			log('info','Trans/Take All');
 
@@ -316,6 +375,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'cut_all':
 			log('info','Cut All');
 
@@ -327,6 +387,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'recall_next':
 			log('info','recall_next');
 
@@ -338,6 +399,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'freeze':
 			log('info', 'freeze');
 
@@ -349,6 +411,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'unfreeze':
 			log('info', 'unfreeze');
 
@@ -360,6 +423,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'preset_in_pvw':
 			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
@@ -371,6 +435,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'preset_in_pgm':
 			log('info','Recall to PGM id:' + opt.preset_in_pgm);
 
@@ -382,6 +447,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'play_cue':
 			log('info','play_cue:' + opt.cueNumber);
 
@@ -393,6 +459,7 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'stop_cue':
 			log('info','stop_cue:' + opt.cueNumber);
 
@@ -404,17 +471,69 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
 		case 'change_aux':
-			log('info', `change_aux, source: ${opt.source} destination ${opt.auxdestination}`);
+			log('info', `change_aux, source: ${opt.source} destination ${opt.auxDestination}`);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.changeAuxContent(parseInt(opt.auxdestination), -1, parseInt(opt.source), function(obj, res) {
+				self.eventmaster.changeAuxContent(parseInt(opt.auxDestination), -1, parseInt(opt.source), function(obj, res) {
 					debug('changeAuxContent response', res);
 				}).on('error', function(err) {
 					log('error','EventMaster Error: '+ err);
 				});
 			}
 			break;
+		/* only available on software not yet published
+		case 'testpattern_on_AUX':
+			log('info', `change_testAuxPattern, id: ${opt.testPattern} destination ${opt.auxDestination}`);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.changeAuxContentTestPattern(parseInt(opt.auxDestination), parseInt(opt.testPattern), function(obj, res) {
+					debug('changeAuxContentTestPattern response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+
+		case 'testpattern_on_SCREEN':
+			log('info', `change_testPattern, id: ${opt.testPattern} destination ${opt.screenDestination}`);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.changeContentTestPattern(parseInt(opt.screenDestination), parseInt(opt.testPattern), function(obj, res) {
+					debug('changeAuxContentTestPattern response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+		*/
+		/* only available on software not yet published
+		case 'armUnarmDestination':
+			log('info', `armUnarmDestination, arm/unarm ${opt.armUnarm}`);
+			const testArray = [{Name: 'Dest1', id: 1},{Name: 'Dest2', id: 2}];
+			if (self.eventmaster !== undefined) {
+				//self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), screenDestinations, auxDestinations, function(obj, res) {
+				self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), testArray, {}, function(obj, res) {
+					debug('armUnarmDestination response', res);
+				}).on('error', function(err) {
+					log('error','Eventmaster Error: '+err);
+				});
+			}
+			break;
+		*/
+		/* only available on software not yet published
+		case 'destinationGroup':
+			log('info', `destinationGroup: ${opt.id}`)
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.activateDestGroup(parseInt(opt.id), function(obj, res) {
+					debug('activateDestGroup response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+			*/
 	}
 };
 
