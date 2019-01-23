@@ -437,18 +437,18 @@ instance.prototype.initPresets = function (updates) {
 				{
 					action: 'preset_in_pvw',
 					options: {
-						preset_in_pvw: preset
+						preset_in_pvw: self.CHOICES_PRESETS[preset].id
 					}
 				}]
 			})
 	}
 
-	for (var preset in self.CHOICES_PRESETS) {
+	for (var presetPGM in self.CHOICES_PRESETS) {
 			presets.push({
 				category: 'Presets to PGM',
 				bank: {
 					style: 'text',
-					text: self.CHOICES_PRESETS[preset].label,
+					text: self.CHOICES_PRESETS[presetPGM].label,
 					size: '14',
 					color: self.rgb(255,0,0),
 					bgcolor: self.rgb(235,235,235)
@@ -457,7 +457,7 @@ instance.prototype.initPresets = function (updates) {
 				{
 					action: 'preset_in_pgm',
 					options: {
-						preset_in_pvw: preset
+						preset_in_pgm: self.CHOICES_PRESETS[presetPGM].id
 					}
 				}]
 			})
