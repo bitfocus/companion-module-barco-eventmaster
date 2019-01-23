@@ -478,7 +478,7 @@ instance.prototype.initPresets = function (updates) {
 				{
 					action: 'play_cue',
 					options: {
-						cueNumber: cue
+						cueNumber: self.CHOICES_CUES[cue].id
 					}
 				}]
 			})
