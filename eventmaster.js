@@ -306,6 +306,32 @@ instance.prototype.actions = function(system) {
 				id: 'auxDestination',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
+		},
+		'subscribe': {
+			label: 'subscribe to SourceChanged',
+			options: [{
+				type: 'textinput',
+				label: 'IP to send JSON to',
+				id: 'ip',
+				regex: self.REGEX_IP
+			},{
+				type: 'textinput',
+				label: 'Portnumber',
+				id: 'port'
+			}]
+		},
+		'unsubscribe': {
+			label: 'unsubscribe to SourceChanged',
+			options: [{
+				type: 'textinput',
+				label: 'IP to send JSON to',
+				id: 'ip',
+				regex: self.REGEX_IP
+			},{
+				type: 'textinput',
+				label: 'Portnumber',
+				id: 'port'
+			}]
 		}
 		/* only available on software not yet published/tested
 		'testpattern_on_AUX': {
@@ -352,8 +378,7 @@ instance.prototype.actions = function(system) {
 		} */
 	};
 
-	//self.setActions(actions);
-	self.system.emit('instance_actions', self.id, actions);
+	self.setActions(actions);
 }
 
 instance.prototype.action = function(action) {
@@ -483,6 +508,31 @@ instance.prototype.action = function(action) {
 				});
 			}
 			break;
+
+		case 'subscribe':
+			log('info', `subscribe to localhost`);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.subscribe(opt.ip, opt.port, ["SourceChanged","BGSourceChanged", "ScreenDestChanged", "AUXDestChanged"], function(obj, res) {
+					debug('subscribe response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+
+		case 'unsubscribe':
+			log('info', `unsubscribe`);
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.unsubscribe(opt.ip, opt.port, ["SourceChanged","BGSourceChanged", "ScreenDestChanged", "AUXDestChanged"], function(obj, res) {
+					debug('unsubscribe response', res);
+				}).on('error', function(err) {
+					log('error','EventMaster Error: '+ err);
+				});
+			}
+			break;
+
 		/* only available on software not yet published
 		case 'testpattern_on_AUX':
 			log('info', `change_testAuxPattern, id: ${opt.testPattern} destination ${opt.auxDestination}`);
