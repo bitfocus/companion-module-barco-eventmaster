@@ -62,6 +62,10 @@ instance.prototype.init = function() {
 	self.CHOICES_CUES = [];
 	self.CHOICES_AUXDESTINATIONS = [];
 	self.CHOICES_SCREENDESTINATIONS = [];
+	self.CHOICES_FREEZE = [
+		{ label: 'Freeze', id: '1'},
+		{ label: 'Unfreeze', id: '0'}
+	];
 	self.CHOICES_TESTPATTERN = [
 		{ label: 'Pattern 1', id: '1'},
 		{ label: 'Pattern 2', id: '2'},
@@ -239,22 +243,46 @@ instance.prototype.actions = function(system) {
 		'trans_all': { label: 'Take/Trans Active' },
 		'cut_all': { label: 'Cut Active' },
 		'recall_next': { label: 'Recall Next Preset' },
-		'freeze': {
-			label: 'Freeze',
+		'frzSource': {
+			label: 'Freeze/Unfreeze Source',
 			options: [{
+				type: 'dropdown',
+				label: 'freeze/unfreeze',
+				id: 'frzType',
+				choices: self.CHOICES_FREEZE
+			},{
 				type: 'dropdown',
 				label: 'Source',
 				id: 'frzSource',
 				choices: self.CHOICES_SOURCES
 			}]
 		},
-		'unfreeze': {
-			label: 'Unfreeze',
+		'frzScreenDest': {
+			label: 'Freeze/Unfreeze Screen Destination',
 			options: [{
 				type: 'dropdown',
-				label: 'Source',
-				id: 'unfrzSource',
-				choices: self.CHOICES_SOURCES
+				label: 'freeze/unfreeze',
+				id: 'frzType',
+				choices: self.CHOICES_FREEZE
+			},{
+				type: 'dropdown',
+				label: 'Screen Destination',
+				id: 'frzDest',
+				choices: self.CHOICES_SCREENDESTINATIONS
+			}]
+		},
+		'frzAuxDest': {
+			label: 'Freeze/Unfreeze Aux Destination',
+			options: [{
+				type: 'dropdown',
+				label: 'freeze/unfreeze',
+				id: 'frzType',
+				choices: self.CHOICES_FREEZE
+			},{
+				type: 'dropdown',
+				label: 'Screen Destination',
+				id: 'frzDest',
+				choices: self.CHOICES_AUXDESTINATIONS
 			}]
 		},
 		'preset_in_pvw': {
@@ -306,7 +334,7 @@ instance.prototype.actions = function(system) {
 				id: 'auxDestination',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
-		},
+		}/*,
 		'subscribe': {
 			label: 'subscribe to SourceChanged',
 			options: [{
@@ -332,7 +360,7 @@ instance.prototype.actions = function(system) {
 				label: 'Portnumber',
 				id: 'port'
 			}]
-		}
+		}*/
 		/* only available on software not yet published/tested
 		'testpattern_on_AUX': {
 			label: 'Set testpattern for AUX',
@@ -449,6 +477,41 @@ instance.prototype.action = function(action) {
 			}
 			break;
 
+		case 'frzSource':
+			log('info', '(un)freeze source');
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.freezeDestSource(0, parseInt(opt.frzSource), 0, parseInt(opt.frzType), function(obj, res) {
+					debug('freeze all response', res);
+				}).on('error', function(err) {
+					log('error', 'EventMaster Error: ' + err);
+				});
+			}
+			break;
+
+			case 'frzScreenDest':
+				log('info', '(un)freeze Screen Destination');
+
+				if (self.eventmaster !== undefined) {
+					self.eventmaster.freezeDestSource(2, parseInt(opt.frzDest), 0, parseInt(opt.frzType), function(obj, res) {
+						debug('freeze all response', res);
+					}).on('error', function(err) {
+						log('error', 'EventMaster Error: ' + err);
+					});
+				}
+				break;
+
+		case 'frzAuxDest':
+			log('info', '(un)freeze Aux Destination');
+
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.freezeDestSource(3, parseInt(opt.frzDest), 0, parseInt(opt.frzType), function(obj, res) {
+					debug('freeze all response', res);
+				}).on('error', function(err) {
+					log('error', 'EventMaster Error: ' + err);
+				});
+			}
+			break;
 		case 'preset_in_pvw':
 			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
