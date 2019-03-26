@@ -8,11 +8,9 @@ This module uses the official EventMaster JSON API. Unfortunately the JSON API i
 * Take/Trans Active
 * Cut Active
 * Recall Next Preset
-* Freeze
-* Unfreeze
+* Freeze/Unfreeze of Source & Destinations
 * Preset in PVW
 * Preset in PGM
-**Below functions, not Tested yet on live machine (JSON)**
 * Play Cue
 * Stop Cue
 * Change content of AUX Destinations
@@ -20,3 +18,5 @@ This module uses the official EventMaster JSON API. Unfortunately the JSON API i
 **Presets are available for**
 * Presets
 * Cues
+* Auto Trans/Cut
+* Recall Next

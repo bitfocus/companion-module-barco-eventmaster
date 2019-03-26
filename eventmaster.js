@@ -249,7 +249,8 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'freeze/unfreeze',
 				id: 'frzType',
-				choices: self.CHOICES_FREEZE
+				choices: self.CHOICES_FREEZE,
+				default: '1'
 			},{
 				type: 'dropdown',
 				label: 'Source',
@@ -263,7 +264,8 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'freeze/unfreeze',
 				id: 'frzType',
-				choices: self.CHOICES_FREEZE
+				choices: self.CHOICES_FREEZE,
+				default: '1'
 			},{
 				type: 'dropdown',
 				label: 'Screen Destination',
@@ -277,10 +279,11 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'freeze/unfreeze',
 				id: 'frzType',
-				choices: self.CHOICES_FREEZE
+				choices: self.CHOICES_FREEZE,
+				default: '1'
 			},{
 				type: 'dropdown',
-				label: 'Screen Destination',
+				label: 'Aux Destination',
 				id: 'frzDest',
 				choices: self.CHOICES_AUXDESTINATIONS
 			}]
@@ -654,6 +657,51 @@ instance.prototype.initPresets = function (updates) {
 	var self = this;
 	var presets = [];
 
+	presets.push({
+		category: 'Basics',
+		bank: {
+			style: 'text',
+			text: 'Take',
+			size: '14',
+			color: self.rgb(0,0,0),
+			bgcolor: self.rgb(255,0,0)
+		},
+		actions: [
+			{
+				action: 'trans_all'
+			}
+		]
+	})
+	presets.push({
+		category: 'Basics',
+		bank: {
+			style: 'text',
+			text: 'Cut',
+			size: '14',
+			color: self.rgb(0,0,0),
+			bgcolor: self.rgb(255,0,0)
+		},
+		actions: [
+			{
+				action: 'cut_all'
+			}
+		]
+	})
+	presets.push({
+		category: 'Basics',
+		bank: {
+			style: 'text',
+			text: 'Recall next',
+			size: '14',
+			color: self.rgb(0,0,0),
+			bgcolor: self.rgb(235,0,0)
+		},
+		actions: [
+			{
+				action: 'recall_next'
+			}
+		]
+	})
 	//Load presets from eventmaster into presets from companion
 	for (var preset in self.CHOICES_PRESETS) {
 			presets.push({
