@@ -137,6 +137,7 @@ instance.prototype.config_fields = function() {
 		id: 'host',
 		label: 'Target IP',
 		width: 6,
+		default: '192.168.0.175',
 		regex: self.REGEX_IP
 	}]
 };
@@ -162,7 +163,7 @@ instance.prototype.updateChoices = function(arguments) {
 				for (var n in res) {
 					var preset = res[n];
 
-					self.CHOICES_PRESETS.push({ label: preset.Name, id: preset.id });
+					self.CHOICES_PRESETS.push({ label: preset.presetSno + " " + preset.Name.replace('&#40;', '('), id: preset.id, sort: preset.presetSno });
 				}
 			}
 
@@ -294,7 +295,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Preset',
 				id: 'preset_in_pvw',
-				choices: self.CHOICES_PRESETS
+				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
 			}]
 		},
 		'preset_in_pgm': {
@@ -303,7 +304,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Preset',
 				id: 'preset_in_pgm',
-				choices: self.CHOICES_PRESETS
+				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
 			}]
 		},
 		'play_cue': {
