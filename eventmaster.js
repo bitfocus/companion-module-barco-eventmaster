@@ -150,8 +150,14 @@ instance.prototype.destroy = function() {
 	debug("destroy");;
 };
 
+function htmlDecode(input) {
+	var doc = newDOMParser().parseFromString(input, "text/html");
+	return doc.documentElement.textContent;
+}
+
 instance.prototype.updateChoices = function(arguments) {
 	var self = this;
+
 
 	if (self.eventmaster !== undefined) {
 
@@ -162,8 +168,8 @@ instance.prototype.updateChoices = function(arguments) {
 
 				for (var n in res) {
 					var preset = res[n];
-
-					self.CHOICES_PRESETS.push({ label: preset.presetSno + " " + preset.Name.replace('&#40;', '('), id: preset.id, sort: preset.presetSno });
+					//preset.Name.replace('&#40;', '(')
+					self.CHOICES_PRESETS.push({ label: preset.presetSno + " " + htmlDecode(preset.Name), id: preset.id, sort: preset.presetSno });
 				}
 			}
 
