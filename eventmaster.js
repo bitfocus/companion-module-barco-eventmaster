@@ -169,7 +169,7 @@ instance.prototype.updateChoices = function(arguments) {
 				for (var n in res) {
 					var preset = res[n];
 					//preset.Name.replace('&#40;', '(')
-					self.CHOICES_PRESETS.push({ label: preset.presetSno + " " + htmlDecode(preset.Name), id: preset.id, sort: preset.presetSno });
+					self.CHOICES_PRESETS.push({ label: preset.presetSno + " " + preset.Name, id: preset.id, sort: preset.presetSno });
 				}
 			}
 
