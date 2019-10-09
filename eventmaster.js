@@ -262,6 +262,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Source',
 				id: 'frzSource',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_SOURCES
 			}]
 		},
@@ -301,6 +302,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Preset',
 				id: 'preset_in_pvw',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
 			}]
 		},
@@ -310,6 +312,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Preset',
 				id: 'preset_in_pgm',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
 			}]
 		},
@@ -319,6 +322,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'cue',
 				id: 'cueNumber',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_CUES
 			}]
 		},
@@ -328,6 +332,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'cue',
 				id: 'cueNumber',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_CUES
 			}]
 		},
@@ -337,6 +342,7 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Source',
 				id: 'source',
+				minChoicesForSearch: 5,
 				choices: self.CHOICES_SOURCES
 			},{
 				type: 'dropdown',
