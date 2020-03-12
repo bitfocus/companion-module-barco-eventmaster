@@ -1,2 +1,2 @@
-# companion-module-eventmaster
+# companion-module-barco-eventmaster
 See HELP.md and LICENSE
