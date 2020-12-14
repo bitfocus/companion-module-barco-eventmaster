@@ -57,11 +57,11 @@ instance.prototype.init = function() {
 	debug = self.debug;
 	log = self.log;
 
-	self.CHOICES_PRESETS = [];
-	self.CHOICES_SOURCES = [];
-	self.CHOICES_CUES = [];
-	self.CHOICES_AUXDESTINATIONS = [];
-	self.CHOICES_SCREENDESTINATIONS = [];
+	self.CHOICES_PRESETS = [{id: 0, label: 'no presets loaded yet'}];
+	self.CHOICES_SOURCES = [{id: 0, label: 'no sources loaded yet'}];
+	self.CHOICES_CUES = [{id: 0, label: 'no cues loaded yet'}];
+	self.CHOICES_AUXDESTINATIONS = [{id: 0, label: 'no auxes loaded yet'}];
+	self.CHOICES_SCREENDESTINATIONS = [{id: 0, label: 'no destinations loaded yet'}];
 	self.CHOICES_FREEZE = [
 		{ label: 'Freeze', id: '1'},
 		{ label: 'Unfreeze', id: '0'}
@@ -263,7 +263,8 @@ instance.prototype.actions = function(system) {
 				label: 'Source',
 				id: 'frzSource',
 				minChoicesForSearch: 5,
-				choices: self.CHOICES_SOURCES
+				choices: self.CHOICES_SOURCES,
+				default: '0'
 			}]
 		},
 		'frzScreenDest': {
@@ -278,7 +279,8 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Screen Destination',
 				id: 'frzDest',
-				choices: self.CHOICES_SCREENDESTINATIONS
+				choices: self.CHOICES_SCREENDESTINATIONS,
+				default: '0'
 			}]
 		},
 		'frzAuxDest': {
@@ -293,7 +295,8 @@ instance.prototype.actions = function(system) {
 				type: 'dropdown',
 				label: 'Aux Destination',
 				id: 'frzDest',
-				choices: self.CHOICES_AUXDESTINATIONS
+				choices: self.CHOICES_AUXDESTINATIONS,
+				default: '0'
 			}]
 		},
 		'preset_in_pvw': {
@@ -304,6 +307,7 @@ instance.prototype.actions = function(system) {
 				id: 'preset_in_pvw',
 				minChoicesForSearch: 5,
 				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
+				default: '0'
 			}]
 		},
 		'preset_in_pgm': {
@@ -314,6 +318,7 @@ instance.prototype.actions = function(system) {
 				id: 'preset_in_pgm',
 				minChoicesForSearch: 5,
 				choices: self.CHOICES_PRESETS.sort((a,b) => a.sort - b.sort),
+				default: '0'
 			}]
 		},
 		'play_cue': {
@@ -323,7 +328,8 @@ instance.prototype.actions = function(system) {
 				label: 'cue',
 				id: 'cueNumber',
 				minChoicesForSearch: 5,
-				choices: self.CHOICES_CUES
+				choices: self.CHOICES_CUES,
+				default: '0'
 			}]
 		},
 		'stop_cue': {
@@ -333,7 +339,8 @@ instance.prototype.actions = function(system) {
 				label: 'cue',
 				id: 'cueNumber',
 				minChoicesForSearch: 5,
-				choices: self.CHOICES_CUES
+				choices: self.CHOICES_CUES,
+				default: '0'
 			}]
 		},
 		'change_aux': {
@@ -343,12 +350,14 @@ instance.prototype.actions = function(system) {
 				label: 'Source',
 				id: 'source',
 				minChoicesForSearch: 5,
-				choices: self.CHOICES_SOURCES
+				choices: self.CHOICES_SOURCES,
+				default: '0'
 			},{
 				type: 'dropdown',
 				label: 'Destination',
 				id: 'auxDestination',
-				choices: self.CHOICES_AUXDESTINATIONS
+				choices: self.CHOICES_AUXDESTINATIONS,
+				default: '0'
 			}]
 		}/*,
 		'subscribe': {
