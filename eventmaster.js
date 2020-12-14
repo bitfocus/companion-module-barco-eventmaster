@@ -359,7 +359,23 @@ instance.prototype.actions = function(system) {
 				choices: self.CHOICES_AUXDESTINATIONS,
 				default: '0'
 			}]
-		}/*,
+		},
+		'armUnarmDestination': {
+			label: 'arm destinations',
+			options: [{
+				type: 'dropdown',
+				label: 'arm/un-arm',
+				id: 'armUnarm',
+				choices: [{ label: 'arm', id: 1},{ label: 'disarm', id: 0}],
+				default: '1'
+			},{
+				type: 'dropdown',
+				label: 'destination',
+				id: 'screenDestination',
+				choices: self.CHOICES_SCREENDESTINATIONS,
+				default: '0'
+			}]
+		} /*,
 		'subscribe': {
 			label: 'subscribe to SourceChanged',
 			options: [{
@@ -414,21 +430,8 @@ instance.prototype.actions = function(system) {
 				id: 'testPattern',
 				choices: self.CHOICES_TESTPATTERN
 			}]
-		},
-		'armUnarmDestination': {
-			label: 'arm destinations',
-			options: [{
-				type: 'dropdown',
-				label: 'arm/un-arm',
-				id: 'armUnarm',
-				choices: [{ label: 'arm', id: 1},{ label: 'disarm', id: 0}]
-			},{
-				type: 'dropdown',
-				label: 'destination',
-				id: 'screenDestination',
-				choices: self.CHOICES_SCREENDESTINATIONS
-			}]
-		} */
+		}
+		*/
 	};
 
 	self.setActions(actions);
@@ -621,6 +624,19 @@ instance.prototype.action = function(action) {
 			}
 			break;
 
+		case 'armUnarmDestination':
+			log('info', `armUnarmDestination, arm/unarm ${opt.armUnarm}`);
+			// const testArray = [{Name: 'Dest1', id: 1},{Name: 'Dest2', id: 2}];
+			if (self.eventmaster !== undefined) {
+				self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), opt.screenDestination, {}, function(obj, res) {
+				//self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), testArray, {}, function(obj, res) {
+					debug('armUnarmDestination response', res);
+				}).on('error', function(err) {
+					log('error','Eventmaster Error: '+err);
+				});
+			}
+			break;
+
 		/* only available on software not yet published
 		case 'testpattern_on_AUX':
 			log('info', `change_testAuxPattern, id: ${opt.testPattern} destination ${opt.auxDestination}`);
@@ -647,18 +663,7 @@ instance.prototype.action = function(action) {
 			break;
 		*/
 		/* only available on software not yet published
-		case 'armUnarmDestination':
-			log('info', `armUnarmDestination, arm/unarm ${opt.armUnarm}`);
-			const testArray = [{Name: 'Dest1', id: 1},{Name: 'Dest2', id: 2}];
-			if (self.eventmaster !== undefined) {
-				//self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), screenDestinations, auxDestinations, function(obj, res) {
-				self.eventmaster.armUnarmDestination(parseInt(opt.armUnarm), testArray, {}, function(obj, res) {
-					debug('armUnarmDestination response', res);
-				}).on('error', function(err) {
-					log('error','Eventmaster Error: '+err);
-				});
-			}
-			break;
+
 		*/
 		/* only available on software not yet published
 		case 'destinationGroup':
