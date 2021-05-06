@@ -559,7 +559,7 @@ instance.prototype.action = function(action) {
 			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
 			if (self.eventmaster !== undefined) {
-				if(self.config.multiuserEnable === true) {
+				if (self.config.multiuserEnable === true) {
 					self.eventmaster.activatePresetByIdSuper(parseInt(opt.preset_in_pvw), 0, self.config.multiuserPassword, function(obj, res) {
 						debug('recall preset pvw response', res);
 					}).on('error', function(err) {
@@ -579,11 +579,19 @@ instance.prototype.action = function(action) {
 			log('info','Recall to PGM id:' + opt.preset_in_pgm);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
-					debug('recall preset pgm response', res);
-				}).on('error', function(err) {
-					log('error','EventMaster Error: '+ err);
-				});
+				if (self.config.multiuserEnable === true) {
+					self.eventmaster.activatePresetByIdSuper(parseInt(opt.preset_in_pgm), 1, self.config.multiuserPassword, function(obj, res) {
+						debug('recall preset pgm response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});	
+				} else {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
+						debug('recall preset pgm response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
+				}
 			}
 			break;
 
