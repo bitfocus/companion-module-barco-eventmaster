@@ -132,13 +132,28 @@ instance.prototype.config_fields = function() {
 		width: 12,
 		label: 'Information',
 		value: 'This module uses the official EventMaster JSON API. Unfortunately the JSON API is not available in the simulator, so you need to use the real deal to get this working. If the status is OK, it ONLY means that the IP configured answers on icmp ping.'
-	}, {
+	}, 
+	{
 		type: 'textinput',
 		id: 'host',
 		label: 'Target IP',
 		width: 6,
 		default: '192.168.0.175',
 		regex: self.REGEX_IP
+	},
+	{
+		type: 'checkbox',
+		id: 'multiuserEnable',
+		label: 'Multiuser Enabled in EventMaster',
+		width: 6,
+		default: 0
+	},
+	{
+		type: 'textinput',
+		id: 'multiuserPassword',
+		label: 'Multiuser Password',
+		width: 6,
+		default: ''
 	}]
 };
 
@@ -544,11 +559,19 @@ instance.prototype.action = function(action) {
 			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
-					debug('recall preset pvw response', res);
-				}).on('error', function(err) {
-					log('error','EventMaster Error: '+ err);
-				});
+				if(self.config.multiuserEnable === true) {
+					self.eventmaster.activatePresetByIdSuper(parseInt(opt.preset_in_pvw), 0, self.config.multiuserPassword, function(obj, res) {
+						debug('recall preset pvw response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});					
+				} else {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
+						debug('recall preset pvw response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
+				}
 			}
 			break;
 
