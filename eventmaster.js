@@ -148,9 +148,9 @@ instance.prototype.config_fields = function() {
 		width: 6,
 		default: 'single_user',
 		choices: [
-			{ id: 'single_user', label: 'Single User' },			
+			{ id: 'userSingle', label: 'Single User' },			
 			{ id: 'operator', label: 'Multiuser Normal Operator' },
-			{ id: 'super_user', label: 'Multiuser Super Operator ' },
+			{ id: 'userSuper', label: 'Multiuser Super Operator ' },
 		]
 	},
 	{
