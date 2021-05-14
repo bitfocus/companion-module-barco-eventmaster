@@ -480,13 +480,13 @@ instance.prototype.action = function(action) {
 			log('info','Trans/Take All');
 
 			if (self.eventmaster !== undefined) {
-				if(user == 'operator') {
+				if (user == 'operator') {
 					self.eventmaster.allTrans(user, id, function(obj, res) {
 						debug('trans all response', res);
 					}).on('error', function(err) {
 						log('error','EventMaster Error: '+ err);
 					});
-				} else if(user == 'userSuper') {
+				} else if (user == 'userSuper') {
 					self.eventmaster.allTrans(user, password, function(obj, res) {
 						debug('trans all response', res);
 					}).on('error', function(err) {
@@ -506,11 +506,25 @@ instance.prototype.action = function(action) {
 			log('info','Cut All');
 
 			if (self.eventmaster !== undefined) {
-				self.eventmaster.cut(function(obj, res) {
-					debug('cut all response', res);
-				}).on('error', function(err) {
-					log('error','EventMaster Error: '+ err);
-				});
+				if (user == 'operator') {
+					self.eventmaster.cut(user, id, function(obj, res) {
+						debug('cut all response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
+				} else if (user == 'userSuper') {
+					self.eventmaster.cut(user, password, function(obj, res) {
+						debug('cut all response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
+				} else {
+					self.eventmaster.cut(user, function(obj, res) {
+						debug('cut all response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
+				}
 			}
 			break;
 
@@ -562,7 +576,7 @@ instance.prototype.action = function(action) {
 			}
 			break;
 
-			case 'frzScreenDest':
+		case 'frzScreenDest':
 				log('info', '(un)freeze Screen Destination');
 
 				if (self.eventmaster !== undefined) {
@@ -590,14 +604,20 @@ instance.prototype.action = function(action) {
 			log('info','Recall to PVW id:' + opt.preset_in_pvw);
 
 			if (self.eventmaster !== undefined) {
-				if (self.config.multiuserEnable === true) {
-					self.eventmaster.activatePresetByIdSuper(parseInt(opt.preset_in_pvw), 0, self.config.multiuserPassword, function(obj, res) {
+				if (user == 'operator') {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, user, id, function(obj, res) {
 						debug('recall preset pvw response', res);
 					}).on('error', function(err) {
 						log('error','EventMaster Error: '+ err);
-					});					
+					});				
+				} else if (user == 'userSuper') {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, user, password, function(obj, res) {
+						debug('recall preset pvw response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
 				} else {
-					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, function(obj, res) {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pvw), 0, user, function(obj, res) {
 						debug('recall preset pvw response', res);
 					}).on('error', function(err) {
 						log('error','EventMaster Error: '+ err);
@@ -610,14 +630,20 @@ instance.prototype.action = function(action) {
 			log('info','Recall to PGM id:' + opt.preset_in_pgm);
 
 			if (self.eventmaster !== undefined) {
-				if (self.config.multiuserEnable === true) {
-					self.eventmaster.activatePresetByIdSuper(parseInt(opt.preset_in_pgm), 1, self.config.multiuserPassword, function(obj, res) {
+				if (user == 'operator') {
+					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, user, id, function(obj, res) {
 						debug('recall preset pgm response', res);
 					}).on('error', function(err) {
 						log('error','EventMaster Error: '+ err);
-					});	
+					});
+				} else if (user == 'userSuper') {
+					self.eventmaster.activatePresetById(uparseInt(opt.preset_in_pgm), 1, user, password, function(obj, res) {
+						debug('recall preset pgm response', res);
+					}).on('error', function(err) {
+						log('error','EventMaster Error: '+ err);
+					});
 				} else {
-					self.eventmaster.activatePresetById(parseInt(opt.preset_in_pgm), 1, function(obj, res) {
+					self.eventmaster.activatePresetById(user, parseInt(opt.preset_in_pgm), 1, user, function(obj, res) {
 						debug('recall preset pgm response', res);
 					}).on('error', function(err) {
 						log('error','EventMaster Error: '+ err);
