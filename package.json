@@ -3,7 +3,7 @@
 	"legacy": [
 		"eventmaster"
 	],
-	"version": "1.3.6",
+	"version": "2.0.0",
 	"api_version": "1.0.0",
 	"keywords": [
 		"Protocol",
@@ -21,9 +21,10 @@
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"author": "William Viker <william@bitfocus.io>",
+	"contributors": ["Jeffrey Davidsz <jeffrey.davidsz@vicreo.eu>"],
 	"license": "MIT",
 	"dependencies": {
-		"barco-eventmaster": "6.2.1",
+		"barco-eventmaster": "git://github.com/willosof/node-barco-eventmaster",
 		"ping": "^0.4.1"
 	}
 }

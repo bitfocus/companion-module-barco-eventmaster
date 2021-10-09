@@ -2,10 +2,9 @@
 # yarn lockfile v1
 
 
-barco-eventmaster@6.2.1:
-  version "6.2.1"
-  resolved "https://registry.yarnpkg.com/barco-eventmaster/-/barco-eventmaster-6.2.1.tgz#2a87076c57c5682bd1a025df6faac7caf5ebaa4f"
-  integrity sha512-Mn6djbZmACY14arZ1UGtxtXFDHm5g9Go490ychxOQpjKjj3FAXl5/H+8UnX/3pdUYoRZfRSHWTYdb2exEv4Fog==
+"barco-eventmaster@git://github.com/willosof/node-barco-eventmaster":
+  version "8.0.1"
+  resolved "git://github.com/willosof/node-barco-eventmaster#b6c6586ec02b674b9c3051e0bc79b35d04b80748"
   dependencies:
     node-rest-client "^3.1.0"
 
@@ -35,10 +34,28 @@ node-rest-client@^3.1.0:
     follow-redirects ">=1.2.0"
     xml2js ">=0.2.4"
 
+ping@^0.4.1:
+  version "0.4.1"
+  resolved "https://registry.yarnpkg.com/ping/-/ping-0.4.1.tgz#1436575a39baafe3ed2b76f6a116c51780f32299"
+  integrity sha512-zYouogtyis0QpEZwWY1T26iuIOMJx+ajtjVMcPKIdWRq2Ie3Ftkbel8I25M5kCAQQMQhsez6ZbPiYjNe7aBjSQ==
+  dependencies:
+    q "1.x"
+    underscore "^1.12.0"
+
+q@1.x:
+  version "1.5.1"
+  resolved "https://registry.yarnpkg.com/q/-/q-1.5.1.tgz#7e32f75b41381291d04611f1bf14109ac00651d7"
+  integrity sha1-fjL3W0E4EpHQRhHxvxQQmsAGUdc=
+
 sax@>=0.6.0:
   version "1.2.4"
   resolved "https://registry.yarnpkg.com/sax/-/sax-1.2.4.tgz#2816234e2378bddc4e5354fab5caa895df7100d9"
   integrity sha512-NqVDv9TpANUjFm0N8uM5GxL36UgKi9/atZw+x7YFnQ8ckwFGKrl4xX4yWtrey3UJm5nP1kUbnYgLopqWNSRhWw==
+
+underscore@^1.12.0:
+  version "1.13.1"
+  resolved "https://registry.yarnpkg.com/underscore/-/underscore-1.13.1.tgz#0c1c6bd2df54b6b69f2314066d65b6cde6fcf9d1"
+  integrity sha512-hzSoAVtJF+3ZtiFX0VgfFPHEDRm7Y/QPjGyNo4TVdnDTdft3tr8hEkD25a1jC+TjTuE7tkHGKkhwCgs9dgBB2g==
 
 xml2js@>=0.2.4:
   version "0.4.23"
