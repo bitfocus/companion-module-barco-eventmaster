@@ -24,7 +24,7 @@
 	"contributors": ["Jeffrey Davidsz <jeffrey.davidsz@vicreo.eu>"],
 	"license": "MIT",
 	"dependencies": {
-		"barco-eventmaster": "git://github.com/willosof/node-barco-eventmaster",
+		"barco-eventmaster": "github:willosof/node-barco-eventmaster",
 		"ping": "^0.4.1"
 	}
 }
