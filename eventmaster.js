@@ -137,7 +137,7 @@ class instance extends instance_skel {
 				id: 'usermode',
 				label: 'Multiuser Mode',
 				width: 6,
-				default: 'single_user',
+				default: 'userSingle',
 				choices: [
 					{ id: 'userSingle', label: 'Single User' },
 					{ id: 'operator', label: 'Multiuser Normal Operator' },
