@@ -711,7 +711,7 @@ class instance extends instance_skel {
 							})
 					} else if (user == 'super_user') {
 						this.eventmaster
-							.activatePresetById(uparseInt(opt.preset_in_pgm), 1, user, password, (obj, res) => {
+							.activatePresetById(parseInt(opt.preset_in_pgm), 1, user, password, (obj, res) => {
 								this.debug('recall preset pgm response', res)
 							})
 							.on('error', (err) => {
@@ -719,7 +719,7 @@ class instance extends instance_skel {
 							})
 					} else {
 						this.eventmaster
-							.activatePresetById(user, parseInt(opt.preset_in_pgm), 1, user, (obj, res) => {
+							.activatePresetById(parseInt(opt.preset_in_pgm), 1, user, null, (obj, res) => {
 								this.debug('recall preset pgm response', res)
 							})
 							.on('error', (err) => {
