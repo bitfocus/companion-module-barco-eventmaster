@@ -210,7 +210,7 @@ class instance extends instance_skel {
 				})
 
 			this.eventmaster
-				.listCues((obj, res) => {
+				.listCues(0, (obj, res) => {
 					if (res !== undefined) {
 						this.CHOICES_CUES.length = 0
 
