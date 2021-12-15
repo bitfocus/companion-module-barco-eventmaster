@@ -465,7 +465,6 @@ class instance extends instance_skel {
 				id: 'port'
 			}]
 		}*/
-
 		;(actions['testpattern_on_AUX'] = {
 			label: 'Set testpattern for AUX',
 			options: [
