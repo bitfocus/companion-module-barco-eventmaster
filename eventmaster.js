@@ -189,7 +189,7 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
@@ -206,7 +206,7 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
@@ -223,7 +223,7 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
@@ -714,7 +714,7 @@ class instance extends instance_skel {
 								this.debug('recall preset pgm response', res)
 							})
 							.on('error', (err) => {
-								log('error', 'EventMaster Error: ' + err)
+								this.log('error', 'EventMaster Error: ' + err)
 							})
 					} else {
 						this.eventmaster
@@ -843,7 +843,7 @@ class instance extends instance_skel {
 							debug('changeAuxContentTestPattern response', res)
 						})
 						.on('error', (err) => {
-							log('error', 'EventMaster Error: ' + err)
+							this.log('error', 'EventMaster Error: ' + err)
 						})
 				}
 				break
@@ -857,7 +857,7 @@ class instance extends instance_skel {
 							debug('changeAuxContentTestPattern response', res)
 						})
 						.on('error', (err) => {
-							log('error', 'EventMaster Error: ' + err)
+							this.log('error', 'EventMaster Error: ' + err)
 						})
 				}
 				break
@@ -867,12 +867,12 @@ class instance extends instance_skel {
 		*/
 			/* only available on software not yet published
 		case 'destinationGroup':
-			log('info', `destinationGroup: ${opt.id}`)
+			this.log('info', `destinationGroup: ${opt.id}`)
 			if (this.eventmaster !== undefined) {
 				this.eventmaster.activateDestGroup(parseInt(opt.id), (obj, res) => {
 					debug('activateDestGroup response', res);
 				}).on('error', (err) => {
-					log('error','EventMaster Error: '+ err);
+					this.log('error','EventMaster Error: '+ err);
 				});
 			}
 			break;
