@@ -14,17 +14,26 @@
 		"Event Master"
 	],
 	"shortname": "eventmaster",
-	"homepage": "https://www.barco.com/en/page/event-master",
+	"homepage": "https://github.com/bitfocus/companion-module-barco-eventmaster#readme",
 	"description": "Barco EventMaster plugin for Companion",
 	"main": "eventmaster.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"author": "William Viker <william@bitfocus.io>",
-	"contributors": ["Jeffrey Davidsz <jeffrey.davidsz@vicreo.eu>"],
+	"contributors": [
+		"Jeffrey Davidsz <jeffrey.davidsz@vicreo.eu>"
+	],
 	"license": "MIT",
 	"dependencies": {
 		"barco-eventmaster": "github:willosof/node-barco-eventmaster",
 		"ping": "^0.4.1"
+	},
+	"bugs": {
+		"url": "https://github.com/bitfocus/companion-module-barco-eventmaster/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bitfocus/companion-module-barco-eventmaster.git"
 	}
 }
