@@ -18,7 +18,7 @@ class instance extends instance_skel {
 		super(system, id, config)
 
 		this.CHOICES_PRESETS = [{ id: 0, label: 'no presets loaded yet' }]
-		this.CHOICES_SOURCES = [{ id: 0, label: 'no sources loaded yet' }]
+		this.CHOICES_SOURCES = [{ id: 0, label: 'no sources loaded yet', SrcType: 0 }]
 		this.CHOICES_CUES = [{ id: 0, label: 'no cues loaded yet' }]
 		this.CHOICES_AUXDESTINATIONS = [{ id: 0, label: 'no auxes loaded yet' }]
 		this.CHOICES_SCREENDESTINATIONS = [{ id: 0, label: 'no destinations loaded yet' }]
@@ -199,7 +199,7 @@ class instance extends instance_skel {
 
 						for (var n in res) {
 							var source = res[n]
-							this.CHOICES_SOURCES.push({ label: source.Name, id: source.id })
+							this.CHOICES_SOURCES.push({ label: source.Name, id: source.id, sourceType: source.SrcType })
 						}
 					}
 
@@ -465,7 +465,6 @@ class instance extends instance_skel {
 				id: 'port'
 			}]
 		}*/
-
 		;(actions['testpattern_on_AUX'] = {
 			label: 'Set testpattern for AUX',
 			options: [
@@ -499,9 +498,53 @@ class instance extends instance_skel {
 						choices: this.CHOICES_TESTPATTERN,
 					},
 				],
-			})
-
-		this.setActions(actions)
+			}),
+			(actions['activateSourceMainBackup'] = {
+				label: 'Configure Main/Backup',
+				options: [
+					{
+						type: 'dropdown',
+						label: 'Source',
+						id: 'source',
+						choices: this.CHOICES_SOURCES,
+						default: '0',
+					},
+					{
+						type: 'dropdown',
+						label: 'Backup 1',
+						id: 'backup1',
+						choices: this.CHOICES_SOURCES,
+						default: '0',
+					},
+					{
+						type: 'dropdown',
+						label: 'Backup 2',
+						id: 'backup2',
+						choices: this.CHOICES_SOURCES,
+						default: '0',
+					},
+					{
+						type: 'dropdown',
+						label: 'Backup 3',
+						id: 'backup3',
+						choices: this.CHOICES_SOURCES,
+						default: '0',
+					},
+					{
+						type: 'dropdown',
+						label: 'Backup state',
+						id: 'BackUpState',
+						choices: [
+							{ id: '-1', label: 'Primary' },
+							{ id: '1', label: 'Backup 1' },
+							{ id: '2', label: 'Backup 2' },
+							{ id: '3', label: 'Backup 3' },
+						],
+						default: '-1',
+					},
+				],
+			}),
+			this.setActions(actions)
 	}
 
 	/**
@@ -861,6 +904,45 @@ class instance extends instance_skel {
 							log('error', 'EventMaster Error: ' + err)
 						})
 				}
+				break
+
+			case 'activateSourceMainBackup':
+				this.log(
+					'info',
+					`activateSourceMainBackup, source: ${opt.source} backup 1 ${opt.backup1} backup 2 ${opt.backup2} backup 3 ${opt.backup3}`
+				)
+				let source = parseInt(opt.source)
+				let backup1 = parseInt(opt.backup1)
+				let backup2 = parseInt(opt.backup2)
+				let backup3 = parseInt(opt.backup3)
+				let BackUpState = opt.BackUpState
+				let backup1_ScrType, backup2_ScrType, backup3_ScrType
+				console.log(this.CHOICES_SOURCES);
+					this.CHOICES_SOURCES.forEach(iterator => {
+						if (backup1 === iterator.id) backup1_ScrType = iterator.SrcType
+						else if (backup2 === iterator.id) backup2_ScrType = iterator.SrcType
+						else if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
+					})
+				if (this.eventmaster !== undefined) {
+					console.log(source, backup1_ScrType, backup2_ScrType, backup2, backup3_ScrType, backup3, BackUpState)
+					this.eventmaster
+						.activateSourceMainBackup(
+							source,
+							backup1_ScrType,
+							backup2_ScrType,
+							backup2,
+							backup3_ScrType,
+							backup3,
+							BackUpState,
+							(obj, res) => {
+								debug('activateSourceMainBackup response', res)
+							}
+						)
+						.on('error', (err) => {
+							log('error', 'EventMaster Error: ' + err)
+						})
+				}
+
 				break
 
 			/* only available on software not yet published
