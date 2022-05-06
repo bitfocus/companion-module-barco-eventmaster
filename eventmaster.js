@@ -137,7 +137,7 @@ class instance extends instance_skel {
 				id: 'usermode',
 				label: 'Multiuser Mode',
 				width: 6,
-				default: 'single_user',
+				default: 'userSingle',
 				choices: [
 					{ id: 'userSingle', label: 'Single User' },
 					{ id: 'operator', label: 'Multiuser Normal Operator' },
@@ -189,7 +189,7 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
@@ -206,11 +206,11 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
-				.listCues((obj, res) => {
+				.listCues(0, (obj, res) => {
 					if (res !== undefined) {
 						this.CHOICES_CUES.length = 0
 
@@ -223,7 +223,7 @@ class instance extends instance_skel {
 					this.actions()
 				})
 				.on('error', (err) => {
-					log('error', 'EventMaster Error: ' + err)
+					this.log('error', 'EventMaster Error: ' + err)
 				})
 
 			this.eventmaster
@@ -754,15 +754,15 @@ class instance extends instance_skel {
 							})
 					} else if (user == 'super_user') {
 						this.eventmaster
-							.activatePresetById(uparseInt(opt.preset_in_pgm), 1, user, password, (obj, res) => {
+							.activatePresetById(parseInt(opt.preset_in_pgm), 1, user, password, (obj, res) => {
 								this.debug('recall preset pgm response', res)
 							})
 							.on('error', (err) => {
-								log('error', 'EventMaster Error: ' + err)
+								this.log('error', 'EventMaster Error: ' + err)
 							})
 					} else {
 						this.eventmaster
-							.activatePresetById(user, parseInt(opt.preset_in_pgm), 1, user, (obj, res) => {
+							.activatePresetById(parseInt(opt.preset_in_pgm), 1, user, null, (obj, res) => {
 								this.debug('recall preset pgm response', res)
 							})
 							.on('error', (err) => {
@@ -887,7 +887,7 @@ class instance extends instance_skel {
 							debug('changeAuxContentTestPattern response', res)
 						})
 						.on('error', (err) => {
-							log('error', 'EventMaster Error: ' + err)
+							this.log('error', 'EventMaster Error: ' + err)
 						})
 				}
 				break
@@ -901,7 +901,7 @@ class instance extends instance_skel {
 							debug('changeAuxContentTestPattern response', res)
 						})
 						.on('error', (err) => {
-							log('error', 'EventMaster Error: ' + err)
+							this.log('error', 'EventMaster Error: ' + err)
 						})
 				}
 				break
@@ -950,12 +950,12 @@ class instance extends instance_skel {
 		*/
 			/* only available on software not yet published
 		case 'destinationGroup':
-			log('info', `destinationGroup: ${opt.id}`)
+			this.log('info', `destinationGroup: ${opt.id}`)
 			if (this.eventmaster !== undefined) {
 				this.eventmaster.activateDestGroup(parseInt(opt.id), (obj, res) => {
 					debug('activateDestGroup response', res);
 				}).on('error', (err) => {
-					log('error','EventMaster Error: '+ err);
+					this.log('error','EventMaster Error: '+ err);
 				});
 			}
 			break;
