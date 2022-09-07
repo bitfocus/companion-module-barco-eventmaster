@@ -3,13 +3,8 @@
 
 
 "barco-eventmaster@github:willosof/node-barco-eventmaster":
-<<<<<<< HEAD
-  version "8.0.3"
-  resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/62230ea2c7c427314cb60fc2f0a516cf00b38bd6"
-=======
   version "8.0.1"
   resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/b6c6586ec02b674b9c3051e0bc79b35d04b80748"
->>>>>>> 1978ddba7c6ad346e7f8a88abbf85b8b5474a901
   dependencies:
     node-rest-client "^3.1.0"
 

@@ -179,7 +179,7 @@ class instance extends instance_skel {
 							var preset = res[n]
 							//preset.Name.replace('&#40;', '(')
 							this.CHOICES_PRESETS.push({
-								label: preset.presetSno + ' ' + preset.Name,
+								label: preset.presetSno + ' ' + _.unescape(preset.Name),
 								id: preset.id,
 								sort: preset.presetSno,
 							})
