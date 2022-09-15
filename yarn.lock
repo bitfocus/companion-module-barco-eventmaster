@@ -2,9 +2,9 @@
 # yarn lockfile v1
 
 
-"barco-eventmaster@github:willosof/node-barco-eventmaster":
-  version "8.0.1"
-  resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/b6c6586ec02b674b9c3051e0bc79b35d04b80748"
+"barco-eventmaster@github:willosof/node-barco-eventmaster#v8.0.3":
+  version "8.0.3"
+  resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/207b877aaa23981758e00e1cc01cc78d81ee9a68"
   dependencies:
     node-rest-client "^3.1.0"
 
