@@ -3,6 +3,7 @@ const checkIp = require('check-ip')
 const ping = require('ping')
 const instance_skel = require('../../instance_skel')
 const upgradeScripts = require('./upgrades')
+const _ = require('lodash')
 let debug = () => {}
 
 class instance extends instance_skel {
