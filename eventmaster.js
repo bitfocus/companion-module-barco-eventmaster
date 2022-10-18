@@ -925,11 +925,12 @@ class instance extends instance_skel {
 						else if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
 					})
 				if (this.eventmaster !== undefined) {
-					console.log(source, backup1_ScrType, backup2_ScrType, backup2, backup3_ScrType, backup3, BackUpState)
+					this.log('debug',`Source:${source}, 1:${backup1_ScrType}, ${backup1} 2:${backup2_ScrType}, ${backup2}, 3:${backup3_ScrType}, ${backup3}, State${BackUpState}`)
 					this.eventmaster
 						.activateSourceMainBackup(
 							source,
 							backup1_ScrType,
+							backup1,
 							backup2_ScrType,
 							backup2,
 							backup3_ScrType,

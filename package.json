@@ -3,7 +3,7 @@
 	"legacy": [
 		"eventmaster"
 	],
-	"version": "2.10.0",
+	"version": "2.10.1",
 	"api_version": "1.0.0",
 	"keywords": [
 		"Protocol",
