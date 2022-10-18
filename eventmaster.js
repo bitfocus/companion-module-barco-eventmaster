@@ -200,7 +200,7 @@ class instance extends instance_skel {
 
 						for (var n in res) {
 							var source = res[n]
-							this.CHOICES_SOURCES.push({ label: source.Name, id: source.id, sourceType: source.SrcType })
+							this.CHOICES_SOURCES.push({ label: source.Name, id: source.id, SrcType: source.SrcType })
 						}
 					}
 
