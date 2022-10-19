@@ -921,8 +921,8 @@ class instance extends instance_skel {
 				console.log(this.CHOICES_SOURCES);
 					this.CHOICES_SOURCES.forEach(iterator => {
 						if (backup1 === iterator.id) backup1_ScrType = iterator.SrcType
-						else if (backup2 === iterator.id) backup2_ScrType = iterator.SrcType
-						else if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
+						if (backup2 === iterator.id) backup2_ScrType = iterator.SrcType
+						if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
 					})
 				if (this.eventmaster !== undefined) {
 					this.log('debug',`Source:${source}, 1:${backup1_ScrType}, ${backup1} 2:${backup2_ScrType}, ${backup2}, 3:${backup3_ScrType}, ${backup3}, State${BackUpState}`)
