@@ -908,16 +908,14 @@ class instance extends instance_skel {
 				break
 
 			case 'activateSourceMainBackup':
-				this.log(
-					'info',
-					`activateSourceMainBackup, source: ${opt.source} backup 1 ${opt.backup1} backup 2 ${opt.backup2} backup 3 ${opt.backup3}`
-				)
 				let source = parseInt(opt.source)
 				let backup1 = parseInt(opt.backup1)
 				let backup2 = parseInt(opt.backup2)
 				let backup3 = parseInt(opt.backup3)
-				let BackUpState = opt.BackUpState
-				let backup1_ScrType, backup2_ScrType, backup3_ScrType
+				let BackUpState = parseInt(opt.BackUpState)
+				let backup1_ScrType = 0
+				let backup2_ScrType = 0
+				let backup3_ScrType = 0
 				console.log(this.CHOICES_SOURCES);
 					this.CHOICES_SOURCES.forEach(iterator => {
 						if (backup1 === iterator.id) backup1_ScrType = iterator.SrcType
@@ -925,7 +923,7 @@ class instance extends instance_skel {
 						if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
 					})
 				if (this.eventmaster !== undefined) {
-					this.log('debug',`Source:${source}, 1:${backup1_ScrType}, ${backup1} 2:${backup2_ScrType}, ${backup2}, 3:${backup3_ScrType}, ${backup3}, State${BackUpState}`)
+					this.log('debug',`activateSourceMainBackup: Source:${source}, BU1Type:${backup1_ScrType}, BU1${backup1} BU2Type:${backup2_ScrType}, BU2${backup2}, BU3Type:${backup3_ScrType}, BU3${backup3}, State:${BackUpState}`)
 					this.eventmaster
 						.activateSourceMainBackup(
 							source,
@@ -941,7 +939,7 @@ class instance extends instance_skel {
 							}
 						)
 						.on('error', (err) => {
-							log('error', 'EventMaster Error: ' + err)
+							this.log('error', 'EventMaster Error: ' + err)
 						})
 				}
 
