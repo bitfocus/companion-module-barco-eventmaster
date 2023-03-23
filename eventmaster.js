@@ -6,7 +6,7 @@ const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb } = require('@companion-module/base')
 let debug = () => {}
 
-class instance extends InstanceBase {
+class BarcoInstance extends InstanceBase {
 	/**
 	 * Create an instance of the module
 	 *
@@ -1082,5 +1082,5 @@ class instance extends InstanceBase {
 	}
 }
 
-runEntrypoint(OSCInstance, [])
+runEntrypoint(BarcoInstance, [])
 
