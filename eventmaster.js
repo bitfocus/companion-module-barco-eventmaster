@@ -1,12 +1,12 @@
 const EventMaster = require('barco-eventmaster')
 const checkIp = require('check-ip')
 const ping = require('ping')
-const instance_skel = require('../../instance_skel')
-const upgradeScripts = require('./upgrades')
+// const upgradeScripts = require('./upgrades')
 const _ = require('lodash')
+const { InstanceBase, InstanceStatus, Regex, combineRgb } = require('@companion-module/base')
 let debug = () => {}
 
-class instance extends instance_skel {
+class instance extends InstanceBase {
 	/**
 	 * Create an instance of the module
 	 *
@@ -15,8 +15,18 @@ class instance extends instance_skel {
 	 * @param {Object} config - saved user configuration parameters
 	 * @since 1.0.0
 	 */
-	constructor(system, id, config) {
-		super(system, id, config)
+	constructor(internal) {
+		super(internal)
+
+		
+	}
+
+	GetUpgradeScripts() {
+		return [upgradeScripts]
+	}
+
+	async init(config) {
+		this.config = config
 
 		this.CHOICES_PRESETS = [{ id: 0, label: 'no presets loaded yet' }]
 		this.CHOICES_SOURCES = [{ id: 0, label: 'no sources loaded yet', SrcType: 0 }]
@@ -54,16 +64,9 @@ class instance extends instance_skel {
 		this.ok = false
 		this.retry_interval = setInterval(this.retry.bind(this), 15000)
 		this.actions() // export actions
-	}
+		this.updateStatus(InstanceStatus.UnknownWarning)
 
-	GetUpgradeScripts() {
-		return [upgradeScripts]
-	}
-
-	init() {
-		this.status(this.STATE_UNKNOWN)
-
-		this.debug('creating eventmaster')
+		this.log(`debug`,'creating eventmaster')
 
 		this.retry()
 
@@ -72,7 +75,7 @@ class instance extends instance_skel {
 		this.initPresets()
 	}
 
-	updateConfig(config) {
+	async configUpdated(config) {
 		this.config = config
 		this.updateChoices()
 		this.initPresets()
@@ -115,7 +118,7 @@ class instance extends instance_skel {
 	}
 
 	// Return config fields for web config
-	config_fields() {
+	getConfigFields() {
 		return [
 			{
 				type: 'text',
@@ -131,7 +134,7 @@ class instance extends instance_skel {
 				label: 'Target IP',
 				width: 6,
 				default: '192.168.0.175',
-				regex: this.REGEX_IP,
+				regex: Regex.IP,
 			},
 			{
 				type: 'dropdown',
@@ -163,10 +166,10 @@ class instance extends instance_skel {
 	}
 
 	// When module gets deleted
-	destroy() {
+	async destroy() {
 		clearInterval(this.retry_interval)
 		delete this.eventmaster
-		debug('destroy')
+		this.log(`debug`,'destroy')
 	}
 
 	updateChoices() {
@@ -972,8 +975,8 @@ class instance extends instance_skel {
 				style: 'text',
 				text: 'Take',
 				size: '14',
-				color: this.rgb(0, 0, 0),
-				bgcolor: this.rgb(255, 0, 0),
+				color: combineRgb(0, 0, 0),
+				bgcolor: combineRgb(255, 0, 0),
 			},
 			actions: [
 				{
@@ -987,8 +990,8 @@ class instance extends instance_skel {
 				style: 'text',
 				text: 'Cut',
 				size: '14',
-				color: this.rgb(0, 0, 0),
-				bgcolor: this.rgb(255, 0, 0),
+				color: combineRgb(0, 0, 0),
+				bgcolor: combineRgb(255, 0, 0),
 			},
 			actions: [
 				{
@@ -1002,8 +1005,8 @@ class instance extends instance_skel {
 				style: 'text',
 				text: 'Recall next',
 				size: '14',
-				color: this.rgb(0, 0, 0),
-				bgcolor: this.rgb(235, 0, 0),
+				color: combineRgb(0, 0, 0),
+				bgcolor: combineRgb(235, 0, 0),
 			},
 			actions: [
 				{
@@ -1019,8 +1022,8 @@ class instance extends instance_skel {
 					style: 'text',
 					text: this.CHOICES_PRESETS[preset].label,
 					size: '14',
-					color: this.rgb(0, 0, 0),
-					bgcolor: this.rgb(235, 235, 235),
+					color: combineRgb(0, 0, 0),
+					bgcolor: combineRgb(235, 235, 235),
 				},
 				actions: [
 					{
@@ -1040,8 +1043,8 @@ class instance extends instance_skel {
 					style: 'text',
 					text: this.CHOICES_PRESETS[presetPGM].label,
 					size: '14',
-					color: this.rgb(255, 0, 0),
-					bgcolor: this.rgb(235, 235, 235),
+					color: combineRgb(255, 0, 0),
+					bgcolor: combineRgb(235, 235, 235),
 				},
 				actions: [
 					{
@@ -1062,8 +1065,8 @@ class instance extends instance_skel {
 					style: 'text',
 					text: this.CHOICES_CUES[cue].label,
 					size: '14',
-					color: this.rgb(0, 0, 0),
-					bgcolor: this.rgb(66, 244, 226),
+					color: combineRgb(0, 0, 0),
+					bgcolor: combineRgb(66, 244, 226),
 				},
 				actions: [
 					{
@@ -1079,4 +1082,5 @@ class instance extends instance_skel {
 	}
 }
 
-exports = module.exports = instance
+runEntrypoint(OSCInstance, [])
+
