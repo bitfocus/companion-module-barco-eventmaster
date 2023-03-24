@@ -303,7 +303,7 @@ class BarcoInstance extends InstanceBase {
 		})
 	}
 	/**
-	 * Get alle the actions
+	 * Get all the actions
 	 * @returns actions
 	 */
 	getActions() {
@@ -1065,114 +1065,153 @@ class BarcoInstance extends InstanceBase {
 
 		return actions
 	}
-
+	/**
+	 * Get all the presets
+	 * @returns presets
+	 */
 	getPresets() {
-		const presets = []
+		const presets = {} // main array
 
-		presets.push({
+		presets['Take'] = {
+			type: 'button',
 			category: 'Basics',
-			bank: {
-				style: 'text',
+			style: {
 				text: 'Take',
 				size: '14',
 				color: combineRgb(0, 0, 0),
 				bgcolor: combineRgb(255, 0, 0),
 			},
-			actions: [
+			steps: [
 				{
-					action: 'trans_all',
+					down: [
+						{
+							actionId: 'trans_all',
+						},
+					],
+					up: [],
 				},
 			],
-		})
-		presets.push({
+			feedbacks: [],
+		}
+		presets['Cut'] = {
+			type: 'button',
 			category: 'Basics',
-			bank: {
-				style: 'text',
+			style: {
 				text: 'Cut',
 				size: '14',
 				color: combineRgb(0, 0, 0),
 				bgcolor: combineRgb(255, 0, 0),
 			},
-			actions: [
+			steps: [
 				{
-					action: 'cut_all',
+					down: [
+						{
+							actionId: 'cut_all',
+						},
+					],
+					up: [],
 				},
 			],
-		})
-		presets.push({
+			feedbacks: [],
+		}
+		presets['Recall_next'] = {
+			type: 'button',
 			category: 'Basics',
-			bank: {
-				style: 'text',
+			style: {
 				text: 'Recall next',
 				size: '14',
 				color: combineRgb(0, 0, 0),
 				bgcolor: combineRgb(235, 0, 0),
 			},
-			actions: [
+			steps: [
 				{
-					action: 'recall_next',
+					down: [
+						{
+							actionId: 'recall_next',
+						},
+					],
+					up: [],
 				},
 			],
-		})
+			feedbacks: [],
+		}
 		//Load presets from eventmaster into presets from companion
 		Object.keys(this.eventmasterData.presets).forEach((key) => {
-			presets.push({
+			presets[`PVW_${this.eventmasterData.presets[key].id}`] = {
+				type: 'button',
 				category: 'Presets to PVW',
-				bank: {
-					style: 'text',
+				style: {
 					text: this.eventmasterData.presets[key].presetSno + ' ' + _.unescape(this.eventmasterData.presets[key].Name),
 					size: '14',
 					color: combineRgb(0, 0, 0),
 					bgcolor: combineRgb(235, 235, 235),
 				},
-				actions: [
+				steps: [
 					{
-						action: 'preset_in_pvw',
-						options: {
-							preset_in_pvw: this.eventmasterData.presets[key].id,
-						},
+						down: [
+							{
+								actionId: 'preset_in_pvw',
+								options: {
+									preset_in_pvw: this.eventmasterData.presets[key].id,
+								},
+							},
+						],
+						up: [],
 					},
 				],
-			})
-			presets.push({
+				feedbacks: [],
+			}
+			presets[`PGM_${this.eventmasterData.presets[key].id}`] = {
+				type: 'button',
 				category: 'Presets to PGM',
-				bank: {
-					style: 'text',
+				style: {
 					text: this.eventmasterData.presets[key].presetSno + ' ' + _.unescape(this.eventmasterData.presets[key].Name),
 					size: '14',
 					color: combineRgb(255, 0, 0),
 					bgcolor: combineRgb(235, 235, 235),
 				},
-				actions: [
+				steps: [
 					{
-						action: 'preset_in_pgm',
-						options: {
-							preset_in_pgm: this.eventmasterData.presets[key].id,
-						},
+						down: [
+							{
+								actionId: 'preset_in_pgm',
+								options: {
+									preset_in_pgm: this.eventmasterData.presets[key].id,
+								},
+							},
+						],
+						up: [],
 					},
 				],
-			})
+				feedbacks: [],
+			}
 		})
 
 		Object.keys(this.eventmasterData.presets).forEach((key) => {
-			presets.push({
+			presets[`Cue_${this.eventmasterData.cues[key].id}`] = {
+				type: 'button',
 				category: 'Cues',
-				bank: {
-					style: 'text',
+				style: {
 					text: this.eventmasterData.cues[key].Name,
 					size: '14',
 					color: combineRgb(0, 0, 0),
 					bgcolor: combineRgb(66, 244, 226),
 				},
-				actions: [
+				steps: [
 					{
-						action: 'play_cue',
-						options: {
-							cueNumber: this.eventmasterData.cues[key].id,
-						},
+						down: [
+							{
+								actionId: 'play_cue',
+								options: {
+									cueNumber: this.eventmasterData.cues[key].id,
+								},
+							},
+						],
+						up: [],
 					},
 				],
-			})
+				feedbacks: [],
+			}
 		})
 
 		return presets
