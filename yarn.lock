@@ -645,6 +645,13 @@ chalk@^5.2.0:
   resolved "https://registry.yarnpkg.com/chalk/-/chalk-5.2.0.tgz#249623b7d66869c673699fb66d65723e54dfcfb3"
   integrity sha512-ree3Gqw/nazQAPuJJEy+avdl7QfZMcUvmHIKgEZkGL+xOBzRvup5Hxo6LHuMceSxOabuJLJm5Yp/92R9eMmMvA==
 
+check-ip@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/check-ip/-/check-ip-1.1.1.tgz#77270efaa69a7853fec3709f143036a8e20e7ea6"
+  integrity sha512-LuLBA6r4aS/4B7pvOqmT4Bi+GKnNNC/V18K0zDTRFjAxNeUzGsr0wmsOfFhFH7fGjwdx6GX6wyIQBkUhFox2Pw==
+  dependencies:
+    ip-range-check "^0.0.2"
+
 chownr@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/chownr/-/chownr-2.0.0.tgz#15bfbe53d2eab4cf70f18a8cd68ebe5b3cb1dece"
@@ -1241,6 +1248,18 @@ interpret@^3.1.1:
   version "3.1.1"
   resolved "https://registry.yarnpkg.com/interpret/-/interpret-3.1.1.tgz#5be0ceed67ca79c6c4bc5cf0d7ee843dcea110c4"
   integrity sha512-6xwYfHbajpoF0xLW+iwLkhwgvLoZDfjYfoFNu8ftMoXINzwuymNLd9u/KmwtdT2GbR+/Cz66otEGEVVUHX9QLQ==
+
+ip-range-check@^0.0.2:
+  version "0.0.2"
+  resolved "https://registry.yarnpkg.com/ip-range-check/-/ip-range-check-0.0.2.tgz#605c859687aa4f18463918d46190d8b3699a293c"
+  integrity sha512-sHbyog8viObPK2vZFNYpBM/d2mqs51uuxOhB+0EIMSWmmrflAWne7CeXOWunb5R6bWQVOijbLx7bEY0sE05bug==
+  dependencies:
+    ipaddr.js "^1.0.1"
+
+ipaddr.js@^1.0.1:
+  version "1.9.1"
+  resolved "https://registry.yarnpkg.com/ipaddr.js/-/ipaddr.js-1.9.1.tgz#bff38543eeb8984825079ff3a2a8e6cbd46781b3"
+  integrity sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==
 
 is-core-module@^2.9.0:
   version "2.11.0"
