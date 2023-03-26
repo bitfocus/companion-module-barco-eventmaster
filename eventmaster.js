@@ -3,7 +3,7 @@ const checkIp = require('check-ip')
 const ping = require('ping')
 // const upgradeScripts = require('./upgrades')
 const _ = require('lodash')
-const { InstanceBase, InstanceStatus, Regex, combineRgb } = require('@companion-module/base')
+const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
 let debug = () => {}
 
 class BarcoInstance extends InstanceBase {
@@ -26,11 +26,11 @@ class BarcoInstance extends InstanceBase {
 	async init(config) {
 		this.config = config
 		this.eventmasterData = {
-			presets: { 0: { id: 0, label: 'no presets loaded yet' } },
-			sources: { 0: { id: 0, label: 'no sources loaded yet', SrcType: 0 } },
-			cues: { 0: { id: 0, label: 'no cues loaded yet' } },
-			auxDestinations: { 0: { id: 0, label: 'no auxes loaded yet' } },
-			screenDestinations: { 0: { id: 0, label: 'no destinations loaded yet' } },
+			presets: { 0: { id: 0, Name: 'no presets loaded yet' } },
+			sources: { 0: { id: 0, Name: 'no sources loaded yet', SrcType: 0 } },
+			cues: { 0: { id: 0, Name: 'no cues loaded yet' } },
+			auxDestinations: { 0: { id: 0, Name: 'no auxes loaded yet' } },
+			screenDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
 		}
 		this.CHOICES_FREEZE = [
 			{ label: 'Freeze', id: '1' },
@@ -62,23 +62,22 @@ class BarcoInstance extends InstanceBase {
 
 		this.ok = false
 		this.retry_interval = setInterval(this.connection, 15000)
-		this.actions() // export actions
 		this.updateStatus(InstanceStatus.UnknownWarning)
 
 		this.log(`debug`, 'creating eventmaster')
 
 		this.connection()
 		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions)
-			this.setPresetDefinitions(this.getPresets)
+			this.setActionDefinitions(this.getActions())
+			this.setPresetDefinitions(this.getPresets())
 		})
 	}
 
 	async configUpdated(config) {
 		this.config = config
 		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions)
-			this.setPresetDefinitions(this.getPresets)
+			this.setActionDefinitions(this.getActions())
+			this.setPresetDefinitions(this.getPresets())
 		})
 	}
 
@@ -130,7 +129,7 @@ class BarcoInstance extends InstanceBase {
 	getConfigFields() {
 		return [
 			{
-				type: 'text',
+				type: 'static-text',
 				id: 'info',
 				width: 12,
 				label: 'Information',
@@ -298,7 +297,7 @@ class BarcoInstance extends InstanceBase {
 		await this.getCuesFromEventmaster().catch((err) => {
 			this.log('error', err)
 		})
-		await this.updatePresetsActions().catch((err) => {
+		await this.getDestinationsFromEventmaster().catch((err) => {
 			this.log('error', err)
 		})
 	}
@@ -1039,7 +1038,7 @@ class BarcoInstance extends InstanceBase {
 				}
 			},
 		}
-		actions[destinationGroup] = {
+		actions['destinationGroup'] = {
 			name: 'Activate Destination Group (EXPERIMENTAL)',
 			options: [
 				{
@@ -1188,6 +1187,7 @@ class BarcoInstance extends InstanceBase {
 		})
 
 		Object.keys(this.eventmasterData.presets).forEach((key) => {
+			this.log('debug', `Cue_${this.eventmasterData.cues[key].Name}_${key}`)
 			presets[`Cue_${this.eventmasterData.cues[key].id}`] = {
 				type: 'button',
 				category: 'Cues',
