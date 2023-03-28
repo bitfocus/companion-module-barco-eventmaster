@@ -1,0 +1,37 @@
+{
+	"id": "barco-eventmaster",
+	"name": "barco-eventmaster",
+	"shortname": "eventmaster",
+	"description": "Barco EventMaster plugin for Companion",
+	"version": "1.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/bitfocus/companion-module-barco-eventmaster.git",
+	"bugs": "https://github.com/bitfocus/companion-module-barco-eventmaster/issues",
+	"maintainers": [
+		{
+			"name": "William Viker",
+			"email": "william@bitfocus.io"
+		},
+		{
+			"name": "Jeffrey Davidsz",
+			"email": "jeffrey.davidsz@vicreo.eu"
+		}
+	],
+	"legacyIds": [
+		"eventmaster"
+	],
+	"runtime": {
+		"type": "node18",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../eventmaster.js"
+	},
+	"manufacturer": "Barco",
+	"products": [
+		"Event Master"
+	],
+	"keywords": [
+		"Protocol",
+		"Image Processing"
+	]
+}
