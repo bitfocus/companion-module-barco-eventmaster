@@ -4,7 +4,6 @@ const ping = require('ping')
 // const upgradeScripts = require('./upgrades')
 const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
-let debug = () => {}
 
 class BarcoInstance extends InstanceBase {
 	/**
