@@ -1015,13 +1015,13 @@ class BarcoInstance extends InstanceBase {
 			},
 		}
 		actions['destinationGroup'] = {
-			name: 'Activate Destination Group (EXPERIMENTAL)',
+			name: 'Activate Destination Group (Count from 0)',
 			options: [
 				{
 					type: 'textinput',
 					label: 'id of destination',
 					id: 'id',
-					default: '1',
+					default: '0',
 				},
 			],
 			callback: (action) => {
