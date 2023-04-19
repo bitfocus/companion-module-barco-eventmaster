@@ -1,6 +1,4 @@
 const EventMaster = require('barco-eventmaster')
-const checkIp = require('check-ip')
-const ping = require('ping')
 // const upgradeScripts = require('./upgrades')
 const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
@@ -59,17 +57,10 @@ class BarcoInstance extends InstanceBase {
 			{ label: 'Blue', id: '20' },
 		]
 
-		this.ok = false
-		this.retry_interval = setInterval(this.connection, 15000)
 		this.updateStatus(InstanceStatus.UnknownWarning)
+		this.connection()
 
 		this.log(`debug`, 'creating eventmaster')
-
-		this.connection()
-		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions())
-			this.setPresetDefinitions(this.getPresets())
-		})
 	}
 
 	async configUpdated(config) {
@@ -84,41 +75,27 @@ class BarcoInstance extends InstanceBase {
 	 * Connection
 	 */
 	connection() {
-		if (
-			this.eventmaster === undefined ||
-			(this.config !== undefined && this.config.host !== undefined && this.config.host.match(/^\d+\.\d+\.\d+\.\d+$/))
-		) {
-			if (
-				this.eventmaster === undefined ||
-				(this.eventmaster.ip !== undefined && this.config.host !== this.eventmaster.ip)
-			) {
-				const check = checkIp(this.config.host)
-				if (check.isValid === true) {
-					let cfg = {
-						timeout: 4,
-					}
-					ping.sys.probe(
-						this.config.host,
-						(isAlive) => {
-							if (isAlive == true) {
-								this.eventmaster = new EventMaster(this.config.host)
-								this.updateStatus(InstanceStatus.Ok)
-							} else {
-								this.updateStatus(InstanceStatus.ConnectionFailure, 'No ping reply from ' + this.config.host)
-							}
-						},
-						cfg
-					)
-				} else {
-					this.updateStatus(InstanceStatus.BadConfig, 'Invalid IP configured')
+		if (this.eventmaster === undefined && this.config !== undefined) {
+			this.eventmaster = new EventMaster(this.config.host)
+			this.updateStatus(InstanceStatus.Ok)
+			this.getAllDataFromEventmaster().then(() => {
+				this.setActionDefinitions(this.getActions())
+				this.setPresetDefinitions(this.getPresets())
+			})
+			if (this.retry_interval) clearInterval(this.retry_interval)
+		} else {
+			this.retry_interval = setInterval(() => {
+				if (this.eventmaster === undefined && this.config !== undefined) {
+					this.eventmaster = new EventMaster(this.config.host)
+					this.updateStatus(InstanceStatus.Ok)
+					this.getAllDataFromEventmaster().then(() => {
+						this.setActionDefinitions(this.getActions())
+						this.setPresetDefinitions(this.getPresets())
+					})
+					clearInterval(this.retry_interval)
 				}
-			}
+			}, 15000)
 		}
-
-		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions)
-			this.setPresetDefinitions(this.getPresets)
-		})
 	}
 
 	/**
@@ -176,7 +153,7 @@ class BarcoInstance extends InstanceBase {
 	 * When module gets deleted
 	 */
 	async destroy() {
-		clearInterval(this.retry_interval)
+		if (this.retry_interval) clearInterval(this.retry_interval)
 		delete this.eventmaster
 		this.log(`debug`, 'destroy')
 	}
@@ -205,14 +182,18 @@ class BarcoInstance extends InstanceBase {
 		if (this.eventmaster !== undefined) {
 			// List of presets
 			const Presets = new Promise((resolve, reject) => {
+				this.log('debug', 'step 1')
 				this.eventmaster
 					.listPresets(-1, -1, (obj, res) => {
+						this.log('debug', 'step 2')
 						if (res !== undefined) {
 							this.eventmasterData.presets = this.convertArrayToObject(res, 'id')
 						}
+						this.log('debug', 'step 3')
 						resolve()
 					})
 					.on('error', (err) => {
+						this.log('debug', 'step 4')
 						reject(err)
 					})
 			})
@@ -1060,7 +1041,6 @@ class BarcoInstance extends InstanceBase {
 				}
 			},
 		}
-
 		return actions
 	}
 	/**
@@ -1185,7 +1165,7 @@ class BarcoInstance extends InstanceBase {
 			}
 		})
 
-		Object.keys(this.eventmasterData.presets).forEach((key) => {
+		Object.keys(this.eventmasterData.cues).forEach((key) => {
 			this.log('debug', `Cue_${this.eventmasterData.cues[key].Name}_${key}`)
 			presets[`Cue_${this.eventmasterData.cues[key].id}`] = {
 				type: 'button',
