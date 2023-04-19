@@ -967,9 +967,9 @@ class BarcoInstance extends InstanceBase {
 					id: 'BackUpState',
 					choices: [
 						{ id: '-1', label: 'Primary' },
-						{ id: '1', label: 'Backup 1' },
-						{ id: '2', label: 'Backup 2' },
-						{ id: '3', label: 'Backup 3' },
+						{ id: '0', label: 'Backup 1' },
+						{ id: '1', label: 'Backup 2' },
+						{ id: '2', label: 'Backup 3' },
 					],
 					default: '-1',
 				},

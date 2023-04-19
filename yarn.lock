@@ -586,9 +586,9 @@ balanced-match@^1.0.0:
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
 
-"barco-eventmaster@github:willosof/node-barco-eventmaster#v8.0.3":
-  version "8.0.3"
-  resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/207b877aaa23981758e00e1cc01cc78d81ee9a68"
+"barco-eventmaster@github:willosof/node-barco-eventmaster#v8.0.4":
+  version "8.0.4"
+  resolved "https://codeload.github.com/willosof/node-barco-eventmaster/tar.gz/44bf528200e01246657a3cb9a02c7e5f04f0821c"
   dependencies:
     node-rest-client "^3.1.0"
 
