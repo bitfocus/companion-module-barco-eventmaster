@@ -1029,7 +1029,7 @@ class BarcoInstance extends InstanceBase {
 				if (this.eventmaster !== undefined) {
 					this.eventmaster
 						.activateDestGroup(parseInt(action.options.id), (obj, res) => {
-							debug('activateDestGroup response' + res)
+							this.log('debug', 'activateDestGroup response ' + res)
 						})
 						.on('error', (err) => {
 							this.log('error', 'EventMaster Error: ' + err)
