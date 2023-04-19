@@ -182,18 +182,14 @@ class BarcoInstance extends InstanceBase {
 		if (this.eventmaster !== undefined) {
 			// List of presets
 			const Presets = new Promise((resolve, reject) => {
-				this.log('debug', 'step 1')
 				this.eventmaster
 					.listPresets(-1, -1, (obj, res) => {
-						this.log('debug', 'step 2')
 						if (res !== undefined) {
 							this.eventmasterData.presets = this.convertArrayToObject(res, 'id')
 						}
-						this.log('debug', 'step 3')
 						resolve()
 					})
 					.on('error', (err) => {
-						this.log('debug', 'step 4')
 						reject(err)
 					})
 			})
