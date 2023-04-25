@@ -305,6 +305,7 @@ class BarcoInstance extends InstanceBase {
 			CHOICES_SOURCES.push({
 				label: this.eventmasterData.sources[key].Name,
 				id: this.eventmasterData.sources[key].id,
+				InputCfgIndex: this.eventmasterData.sources[key].InputCfgIndex,
 				SrcType: this.eventmasterData.sources[key].SrcType,
 			})
 		})
@@ -983,16 +984,32 @@ class BarcoInstance extends InstanceBase {
 				let backup1_ScrType = 0
 				let backup2_ScrType = 0
 				let backup3_ScrType = 0
+				let source_InputCfgIndex = 0
+				let backup1_InputCfgIndex = 0
+				let backup2_InputCfgIndex = 0
+				let backup3_InputCfgIndex = 0
 				console.log(CHOICES_SOURCES)
 				CHOICES_SOURCES.forEach((iterator) => {
-					if (backup1 === iterator.id) backup1_ScrType = iterator.SrcType
-					if (backup2 === iterator.id) backup2_ScrType = iterator.SrcType
-					if (backup3 === iterator.id) backup3_ScrType = iterator.SrcType
+					if (source === iterator.id) {
+						source_InputCfgIndex = iterator.InputCfgIndex
+					}
+					if (backup1 === iterator.id) {
+						backup1_ScrType = iterator.SrcType
+						backup1_InputCfgIndex = iterator.InputCfgIndex
+					}
+					if (backup2 === iterator.id) {
+						backup2_ScrType = iterator.SrcType
+						backup2_InputCfgIndex = iterator.InputCfgIndex
+					}
+					if (backup3 === iterator.id) {
+						backup3_ScrType = iterator.SrcType
+						backup3_InputCfgIndex = iterator.InputCfgIndex
+					}
 				})
 				if (this.eventmaster !== undefined) {
 					this.log(
 						'debug',
-						`activateSourceMainBackup: Source:${source}, BU1Type:${backup1_ScrType}, BU1${backup1} BU2Type:${backup2_ScrType}, BU2${backup2}, BU3Type:${backup3_ScrType}, BU3${backup3}, State:${BackUpState}`
+						`activateSourceMainBackup: Source:${source_InputCfgIndex}, BU1Type:${backup1_ScrType}, BU1${backup1_InputCfgIndex} BU2Type:${backup2_ScrType}, BU2${backup2_InputCfgIndex}, BU3Type:${backup3_ScrType}, BU3${backup3_InputCfgIndex}, State:${BackUpState}`
 					)
 					this.eventmaster
 						.activateSourceMainBackup(
