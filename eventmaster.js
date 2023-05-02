@@ -307,6 +307,7 @@ class BarcoInstance extends InstanceBase {
 				id: this.eventmasterData.sources[key].id,
 				InputCfgIndex: this.eventmasterData.sources[key].InputCfgIndex,
 				SrcType: this.eventmasterData.sources[key].SrcType,
+				StillIndex: this.eventmasterData.sources[key].StillIndex,
 			})
 		})
 		let CHOICES_CUES = []
@@ -995,15 +996,27 @@ class BarcoInstance extends InstanceBase {
 					}
 					if (backup1 === iterator.id) {
 						backup1_ScrType = iterator.SrcType
-						backup1_InputCfgIndex = iterator.InputCfgIndex
+						if (backup1_ScrType === 1) {
+							backup1_InputCfgIndex = iterator.StillIndex
+						} else {
+							backup1_InputCfgIndex = iterator.InputCfgIndex
+						}
 					}
 					if (backup2 === iterator.id) {
 						backup2_ScrType = iterator.SrcType
-						backup2_InputCfgIndex = iterator.InputCfgIndex
+						if (backup2_ScrType === 1) {
+							backup2_InputCfgIndex = iterator.StillIndex
+						} else {
+							backup2_InputCfgIndex = iterator.InputCfgIndex
+						}
 					}
 					if (backup3 === iterator.id) {
 						backup3_ScrType = iterator.SrcType
-						backup3_InputCfgIndex = iterator.InputCfgIndex
+						if (backup3_ScrType === 1) {
+							backup3_InputCfgIndex = iterator.StillIndex
+						} else {
+							backup3_InputCfgIndex = iterator.InputCfgIndex
+						}
 					}
 				})
 				if (this.eventmaster !== undefined) {
