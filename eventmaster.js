@@ -75,7 +75,7 @@ class BarcoInstance extends InstanceBase {
 	/**
 	 * Connection
 	 */
-	connection() {
+	async connection() {
 		// Check for ability to ping the machine
 		if (this.config) {
 			ping.promise.probe(this.config.host).then((res) => {
@@ -105,14 +105,36 @@ class BarcoInstance extends InstanceBase {
 	/**
 	 * Init Eventmaster
 	 */
-	initEventmaster() {
+	async initEventmaster() {
 		this.eventmaster = new EventMaster(this.config.host)
 		this.updateStatus(InstanceStatus.Ok)
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
 			this.setPresetDefinitions(this.getPresets())
+			this.eventmasterPoller()
 		})
 		if (this.retry_interval) clearInterval(this.retry_interval)
+	}
+
+	/**
+	 * Create pollers for fetching data from Eventmaster
+	 */
+	async eventmasterPoller() {
+		if (this.config) {
+			if (this.config.pollingInterval === 0) {
+				if (this.polling_interval) clearInterval(this.polling_interval)
+			} else {
+				this.polling_interval = setInterval(
+					() => {
+						this.getAllDataFromEventmaster().then(() => {
+							this.setActionDefinitions(this.getActions())
+							this.setPresetDefinitions(this.getPresets())
+						})
+					},
+					this.config ? this.config.pollingInterval * 1000 : 5000
+				)
+			}
+		}
 	}
 
 	/**
@@ -163,6 +185,13 @@ class BarcoInstance extends InstanceBase {
 				width: 6,
 				default: '0',
 			},
+			{
+				type: 'number',
+				id: 'pollingInterval',
+				label: 'Polling Interval (in seconds) for presets and actions (type 0 to disable)',
+				width: 6,
+				default: 5,
+			},
 		]
 	}
 
@@ -171,6 +200,7 @@ class BarcoInstance extends InstanceBase {
 	 */
 	async destroy() {
 		if (this.retry_interval) clearInterval(this.retry_interval)
+		if (this.polling_interval) clearInterval(this.polling_interval)
 		delete this.eventmaster
 		this.log(`debug`, 'destroy')
 	}
