@@ -66,16 +66,13 @@ class BarcoInstance extends InstanceBase {
 
 	async configUpdated(config) {
 		this.config = config
-		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions())
-			this.setPresetDefinitions(this.getPresets())
-		})
+		this.connection()
 	}
 
 	/**
 	 * Connection
 	 */
-	async connection() {
+	connection() {
 		// Check for ability to ping the machine
 		if (this.config) {
 			ping.promise.probe(this.config.host).then((res) => {
@@ -83,9 +80,9 @@ class BarcoInstance extends InstanceBase {
 					this.log(`debug`, 'ping ok')
 					this.initEventmaster()
 				} else {
-					// If ping fails, retry every 15 seconds
+					// If ping fails, retry every 5 seconds
 					this.log(`debug`, 'ping failed')
-					this.updateStatus(InstanceStatus.Warning, 'No ping response')
+					this.updateStatus(InstanceStatus.Connecting, 'No ping response')
 					this.retry_interval = setInterval(() => {
 						ping.promise.probe(this.config.host).then((res) => {
 							if (res.alive) {
@@ -93,10 +90,10 @@ class BarcoInstance extends InstanceBase {
 								this.initEventmaster()
 							} else {
 								this.log(`debug`, 'ping failed')
-								this.updateStatus(InstanceStatus.Warning, 'No ping response')
+								this.updateStatus(InstanceStatus.Connecting, 'No ping response')
 							}
 						})
-					}, 15000)
+					}, 5000)
 				}
 			})
 		}
@@ -105,7 +102,7 @@ class BarcoInstance extends InstanceBase {
 	/**
 	 * Init Eventmaster
 	 */
-	async initEventmaster() {
+	initEventmaster() {
 		this.eventmaster = new EventMaster(this.config.host)
 		this.updateStatus(InstanceStatus.Ok)
 		this.getAllDataFromEventmaster().then(() => {
@@ -119,7 +116,7 @@ class BarcoInstance extends InstanceBase {
 	/**
 	 * Create pollers for fetching data from Eventmaster
 	 */
-	async eventmasterPoller() {
+	eventmasterPoller() {
 		if (this.config) {
 			if (this.config.pollingInterval === 0) {
 				if (this.polling_interval) clearInterval(this.polling_interval)
