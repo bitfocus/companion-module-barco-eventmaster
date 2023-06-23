@@ -2,6 +2,7 @@ const EventMaster = require('barco-eventmaster')
 // const upgradeScripts = require('./upgrades')
 const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
+const ping = require('ping')
 
 class BarcoInstance extends InstanceBase {
 	/**
@@ -75,27 +76,43 @@ class BarcoInstance extends InstanceBase {
 	 * Connection
 	 */
 	connection() {
-		if (this.eventmaster === undefined && this.config !== undefined) {
-			this.eventmaster = new EventMaster(this.config.host)
-			this.updateStatus(InstanceStatus.Ok)
-			this.getAllDataFromEventmaster().then(() => {
-				this.setActionDefinitions(this.getActions())
-				this.setPresetDefinitions(this.getPresets())
-			})
-			if (this.retry_interval) clearInterval(this.retry_interval)
-		} else {
-			this.retry_interval = setInterval(() => {
-				if (this.eventmaster === undefined && this.config !== undefined) {
-					this.eventmaster = new EventMaster(this.config.host)
-					this.updateStatus(InstanceStatus.Ok)
-					this.getAllDataFromEventmaster().then(() => {
-						this.setActionDefinitions(this.getActions())
-						this.setPresetDefinitions(this.getPresets())
-					})
-					clearInterval(this.retry_interval)
+		// Check for ability to ping the machine
+		if (this.config) {
+			ping.promise.probe(this.config.host).then((res) => {
+				if (res.alive) {
+					this.log(`debug`, 'ping ok')
+					this.initEventmaster()
+				} else {
+					// If ping fails, retry every 15 seconds
+					this.log(`debug`, 'ping failed')
+					this.updateStatus(InstanceStatus.Warning, 'No ping response')
+					this.retry_interval = setInterval(() => {
+						ping.promise.probe(this.config.host).then((res) => {
+							if (res.alive) {
+								this.log(`debug`, 'ping ok')
+								this.initEventmaster()
+							} else {
+								this.log(`debug`, 'ping failed')
+								this.updateStatus(InstanceStatus.Warning, 'No ping response')
+							}
+						})
+					}, 15000)
 				}
-			}, 15000)
+			})
 		}
+	}
+
+	/**
+	 * Init Eventmaster
+	 */
+	initEventmaster() {
+		this.eventmaster = new EventMaster(this.config.host)
+		this.updateStatus(InstanceStatus.Ok)
+		this.getAllDataFromEventmaster().then(() => {
+			this.setActionDefinitions(this.getActions())
+			this.setPresetDefinitions(this.getPresets())
+		})
+		if (this.retry_interval) clearInterval(this.retry_interval)
 	}
 
 	/**
