@@ -128,7 +128,7 @@ class BarcoInstance extends InstanceBase {
 							this.setPresetDefinitions(this.getPresets())
 						})
 					},
-					this.config ? this.config.pollingInterval * 1000 : 5000
+					Math.ceil(this.config.pollingInterval * 1000) || 5000
 				)
 			}
 		}
