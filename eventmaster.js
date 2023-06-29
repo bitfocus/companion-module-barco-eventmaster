@@ -121,15 +121,12 @@ class BarcoInstance extends InstanceBase {
 			if (this.config.pollingInterval === 0) {
 				if (this.polling_interval) clearInterval(this.polling_interval)
 			} else {
-				this.polling_interval = setInterval(
-					() => {
-						this.getAllDataFromEventmaster().then(() => {
-							this.setActionDefinitions(this.getActions())
-							this.setPresetDefinitions(this.getPresets())
-						})
-					},
-					Math.ceil(this.config.pollingInterval * 1000) || 5000
-				)
+				this.polling_interval = setInterval(() => {
+					this.getAllDataFromEventmaster().then(() => {
+						this.setActionDefinitions(this.getActions())
+						this.setPresetDefinitions(this.getPresets())
+					})
+				}, Math.ceil(this.config.pollingInterval * 1000) || 5000)
 			}
 		}
 	}
@@ -204,18 +201,14 @@ class BarcoInstance extends InstanceBase {
 
 	/**
 	 * Converting a data array into an object
-	 * @param {*} array
-	 * @param {*} key
+	 * @param {*} arr
 	 * @returns Object
 	 */
-	convertArrayToObject = (array, key) => {
-		const initialValue = {}
-		return array.reduce((obj, item) => {
-			return {
-				...obj,
-				[item[key]]: item,
-			}
-		}, initialValue)
+	createObjectFromArray = (arr) => {
+		return arr.reduce((result, item) => {
+			result[item.id] = item
+			return result
+		}, {})
 	}
 
 	/**
@@ -229,7 +222,7 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster
 					.listPresets(-1, -1, (obj, res) => {
 						if (res !== undefined) {
-							this.eventmasterData.presets = this.convertArrayToObject(res, 'id')
+							this.eventmasterData.presets = this.convertArrayToObject(res)
 						}
 						resolve()
 					})
@@ -250,7 +243,7 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster
 					.listSources(0, (obj, res) => {
 						if (res !== undefined) {
-							this.eventmasterData.sources = this.convertArrayToObject(res, 'id')
+							this.eventmasterData.sources = this.convertArrayToObject(res)
 						}
 						resolve()
 					})
@@ -271,7 +264,7 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster
 					.listCues(0, (obj, res) => {
 						if (res !== undefined) {
-							this.eventmasterData.cues = this.convertArrayToObject(res, 'id')
+							this.eventmasterData.cues = this.convertArrayToObject(res)
 						}
 						resolve()
 					})
@@ -292,8 +285,8 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster
 					.listDestinations(0, (obj, res) => {
 						if (res !== undefined) {
-							this.eventmasterData.screenDestinations = this.convertArrayToObject(res.ScreenDestination, 'id')
-							this.eventmasterData.auxes = this.convertArrayToObject(res.AuxDestination, 'id')
+							this.eventmasterData.screenDestinations = this.convertArrayToObject(res.ScreenDestination)
+							this.eventmasterData.auxes = this.convertArrayToObject(res.AuxDestination)
 						}
 						resolve()
 					})
@@ -1033,7 +1026,6 @@ class BarcoInstance extends InstanceBase {
 				let backup1_InputCfgIndex = 0
 				let backup2_InputCfgIndex = 0
 				let backup3_InputCfgIndex = 0
-				console.log(CHOICES_SOURCES)
 				CHOICES_SOURCES.forEach((iterator) => {
 					if (source === iterator.id) {
 						source_InputCfgIndex = iterator.InputCfgIndex
@@ -1066,17 +1058,17 @@ class BarcoInstance extends InstanceBase {
 				if (this.eventmaster !== undefined) {
 					this.log(
 						'debug',
-						`activateSourceMainBackup: Source:${source_InputCfgIndex}, BU1Type:${backup1_ScrType}, BU1${backup1_InputCfgIndex} BU2Type:${backup2_ScrType}, BU2${backup2_InputCfgIndex}, BU3Type:${backup3_ScrType}, BU3${backup3_InputCfgIndex}, State:${BackUpState}`
+						`activateSourceMainBackup: Source:${source_InputCfgIndex}, [BU1Type:${backup1_ScrType}, BU1 ${backup1_InputCfgIndex}], [BU2Type:${backup2_ScrType}, BU2 ${backup2_InputCfgIndex}], [BU3Type:${backup3_ScrType}, BU3 ${backup3_InputCfgIndex}], State:${BackUpState}`
 					)
 					this.eventmaster
 						.activateSourceMainBackup(
-							source,
+							source_InputCfgIndex,
 							backup1_ScrType,
-							backup1,
+							backup1_InputCfgIndex,
 							backup2_ScrType,
-							backup2,
+							backup2_InputCfgIndex,
 							backup3_ScrType,
-							backup3,
+							backup3_InputCfgIndex,
 							BackUpState,
 							(obj, res) => {
 								debug('activateSourceMainBackup response' + res)
