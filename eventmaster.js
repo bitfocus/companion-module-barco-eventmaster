@@ -923,7 +923,7 @@ class BarcoInstance extends InstanceBase {
 							parseInt(action.options.auxDestination),
 							parseInt(action.options.testPattern),
 							(obj, res) => {
-								debug('changeAuxContentTestPattern response' + res)
+								this.log('debug','changeAuxContentTestPattern response' + JSON.stringify(res))
 							}
 						)
 						.on('error', (err) => {
@@ -960,7 +960,7 @@ class BarcoInstance extends InstanceBase {
 							parseInt(action.options.screenDestination),
 							parseInt(action.options.testPattern),
 							(obj, res) => {
-								debug('changeAuxContentTestPattern response' + res)
+								this.log('debug','changeAuxContentTestPattern response' + JSON.stringify(res))
 							}
 						)
 						.on('error', (err) => {
@@ -1071,7 +1071,7 @@ class BarcoInstance extends InstanceBase {
 							backup3_InputCfgIndex,
 							BackUpState,
 							(obj, res) => {
-								debug('activateSourceMainBackup response' + res)
+								this.log('debug','activateSourceMainBackup response' + res)
 							}
 						)
 						.on('error', (err) => {
