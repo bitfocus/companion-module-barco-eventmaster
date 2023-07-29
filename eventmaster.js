@@ -204,7 +204,7 @@ class BarcoInstance extends InstanceBase {
 	 * @param {*} arr
 	 * @returns Object
 	 */
-	createObjectFromArray = (arr) => {
+	convertArrayToObject = (arr) => {
 		return arr.reduce((result, item) => {
 			result[item.id] = item
 			return result
