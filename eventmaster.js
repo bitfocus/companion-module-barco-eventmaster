@@ -3,6 +3,7 @@ const EventMaster = require('barco-eventmaster')
 const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
+const { testPattern } = require('./images')
 
 class BarcoInstance extends InstanceBase {
 	/**
@@ -1174,6 +1175,13 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			feedbacks: [],
+		}
+		presets['test_patern_100_bars'] = {
+			type: 'button',
+			category: 'Test patterns',
+			style: {
+				png64: testPattern.bars100,
+			}
 		}
 		//Load presets from eventmaster into presets from companion
 		Object.keys(this.eventmasterData.presets).forEach((key) => {
