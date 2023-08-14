@@ -1,9 +1,9 @@
 const EventMaster = require('barco-eventmaster')
 // const upgradeScripts = require('./upgrades')
-const _ = require('lodash')
 const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
-const { testPattern } = require('./images')
+const getPresets = require('./presets')
+const _ = require('lodash')
 
 class BarcoInstance extends InstanceBase {
 	/**
@@ -108,7 +108,7 @@ class BarcoInstance extends InstanceBase {
 		this.updateStatus(InstanceStatus.Ok)
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
-			this.setPresetDefinitions(this.getPresets())
+			this.setPresetDefinitions(getPresets(this.eventmasterData))
 			this.eventmasterPoller()
 		})
 		if (this.retry_interval) clearInterval(this.retry_interval)
@@ -125,7 +125,7 @@ class BarcoInstance extends InstanceBase {
 				this.polling_interval = setInterval(() => {
 					this.getAllDataFromEventmaster().then(() => {
 						this.setActionDefinitions(this.getActions())
-						this.setPresetDefinitions(this.getPresets())
+						this.setPresetDefinitions(getPresets(this.eventmasterData))
 					})
 				}, Math.ceil(this.config.pollingInterval * 1000) || 5000)
 			}
@@ -368,7 +368,7 @@ class BarcoInstance extends InstanceBase {
 
 		let CHOICES_AUXDESTINATIONS = []
 		Object.keys(this.eventmasterData.auxDestinations).forEach((key) => {
-			// console.log(key, this.eventmasterData.presets[key])
+			// console.log(key, this.eventmasterData.auxDestinations[key])
 			CHOICES_AUXDESTINATIONS.push({
 				label: this.eventmasterData.auxDestinations[key].Name,
 				id: this.eventmasterData.auxDestinations[key].id,
@@ -463,7 +463,6 @@ class BarcoInstance extends InstanceBase {
 				}
 			},
 		}
-
 		actions['trans_all'] = {
 			name: 'Take/Trans Active',
 			options: [],
@@ -653,7 +652,6 @@ class BarcoInstance extends InstanceBase {
 				}
 			},
 		}
-
 		actions['play_cue'] = {
 			name: 'Play cue',
 			options: [
@@ -1106,165 +1104,7 @@ class BarcoInstance extends InstanceBase {
 		}
 		return actions
 	}
-	/**
-	 * Get all the presets
-	 * @returns presets
-	 */
-	getPresets() {
-		const presets = {} // main array
-
-		presets['Take'] = {
-			type: 'button',
-			category: 'Basics',
-			style: {
-				text: 'Take',
-				size: '14',
-				color: combineRgb(0, 0, 0),
-				bgcolor: combineRgb(255, 0, 0),
-			},
-			steps: [
-				{
-					down: [
-						{
-							actionId: 'trans_all',
-						},
-					],
-					up: [],
-				},
-			],
-			feedbacks: [],
-		}
-		presets['Cut'] = {
-			type: 'button',
-			category: 'Basics',
-			style: {
-				text: 'Cut',
-				size: '14',
-				color: combineRgb(0, 0, 0),
-				bgcolor: combineRgb(255, 0, 0),
-			},
-			steps: [
-				{
-					down: [
-						{
-							actionId: 'cut_all',
-						},
-					],
-					up: [],
-				},
-			],
-			feedbacks: [],
-		}
-		presets['Recall_next'] = {
-			type: 'button',
-			category: 'Basics',
-			style: {
-				text: 'Recall next',
-				size: '14',
-				color: combineRgb(0, 0, 0),
-				bgcolor: combineRgb(235, 0, 0),
-			},
-			steps: [
-				{
-					down: [
-						{
-							actionId: 'recall_next',
-						},
-					],
-					up: [],
-				},
-			],
-			feedbacks: [],
-		}
-		presets['test_patern_100_bars'] = {
-			type: 'button',
-			category: 'Test patterns',
-			style: {
-				png64: testPattern.bars100,
-			}
-		}
-		//Load presets from eventmaster into presets from companion
-		Object.keys(this.eventmasterData.presets).forEach((key) => {
-			presets[`PVW_${this.eventmasterData.presets[key].id}`] = {
-				type: 'button',
-				category: 'Presets to PVW',
-				style: {
-					text: this.eventmasterData.presets[key].presetSno + ' ' + _.unescape(this.eventmasterData.presets[key].Name),
-					size: '14',
-					color: combineRgb(0, 0, 0),
-					bgcolor: combineRgb(235, 235, 235),
-				},
-				steps: [
-					{
-						down: [
-							{
-								actionId: 'preset_in_pvw',
-								options: {
-									preset_in_pvw: this.eventmasterData.presets[key].id,
-								},
-							},
-						],
-						up: [],
-					},
-				],
-				feedbacks: [],
-			}
-			presets[`PGM_${this.eventmasterData.presets[key].id}`] = {
-				type: 'button',
-				category: 'Presets to PGM',
-				style: {
-					text: this.eventmasterData.presets[key].presetSno + ' ' + _.unescape(this.eventmasterData.presets[key].Name),
-					size: '14',
-					color: combineRgb(255, 0, 0),
-					bgcolor: combineRgb(235, 235, 235),
-				},
-				steps: [
-					{
-						down: [
-							{
-								actionId: 'preset_in_pgm',
-								options: {
-									preset_in_pgm: this.eventmasterData.presets[key].id,
-								},
-							},
-						],
-						up: [],
-					},
-				],
-				feedbacks: [],
-			}
-		})
-
-		Object.keys(this.eventmasterData.cues).forEach((key) => {
-			this.log('debug', `Cue_${this.eventmasterData.cues[key].Name}_${key}`)
-			presets[`Cue_${this.eventmasterData.cues[key].id}`] = {
-				type: 'button',
-				category: 'Cues',
-				style: {
-					text: this.eventmasterData.cues[key].Name,
-					size: '14',
-					color: combineRgb(0, 0, 0),
-					bgcolor: combineRgb(66, 244, 226),
-				},
-				steps: [
-					{
-						down: [
-							{
-								actionId: 'play_cue',
-								options: {
-									cueNumber: this.eventmasterData.cues[key].id,
-								},
-							},
-						],
-						up: [],
-					},
-				],
-				feedbacks: [],
-			}
-		})
-
-		return presets
-	}
+	
 }
 
 runEntrypoint(BarcoInstance, [])
