@@ -287,7 +287,7 @@ class BarcoInstance extends InstanceBase {
 					.listDestinations(0, (obj, res) => {
 						if (res !== undefined) {
 							this.eventmasterData.screenDestinations = this.convertArrayToObject(res.ScreenDestination)
-							this.eventmasterData.auxes = this.convertArrayToObject(res.AuxDestination)
+							this.eventmasterData.auxDestinations = this.convertArrayToObject(res.AuxDestination)
 						}
 						resolve()
 					})
