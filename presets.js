@@ -6,7 +6,7 @@ const _ = require('lodash')
  * Get all the presets
  * @returns presets
  */
-module.exports = function getPresets(eventmasterData) {
+module.exports = function getPresets(eventmasterData, log) {
 	const presets = {} // main array
 
 	presets['Take'] = {
@@ -124,7 +124,6 @@ module.exports = function getPresets(eventmasterData) {
 		}
 	})
 	Object.keys(eventmasterData.cues).forEach((key) => {
-		this.log('debug', `Cue_${eventmasterData.cues[key].Name}_${key}`)
 		presets[`Cue_${eventmasterData.cues[key].id}`] = {
 			type: 'button',
 			category: 'Cues',
