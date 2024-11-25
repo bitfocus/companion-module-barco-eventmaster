@@ -205,8 +205,18 @@ class BarcoInstance extends InstanceBase {
 	 * @param {*} arr
 	 * @returns Object
 	 */
-	convertArrayToObject = (arr) => {
+	convertArrayToObject = (arr, sortByField) => {
 		if(!arr) return {}
+
+		// Sort the array by the specified field if provided
+		if (sortByField) {
+			arr.sort((a, b) => {
+				if (a[sortByField] < b[sortByField]) return -1;
+				if (a[sortByField] > b[sortByField]) return 1;
+				return 0;
+			});
+		}
+
 		return arr.reduce((result, item) => {
 			result[item.id] = item
 			return result
@@ -224,7 +234,7 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster
 					.listPresets(-1, -1, (obj, res) => {
 						if (res !== undefined) {
-							this.eventmasterData.presets = this.convertArrayToObject(res)
+							this.eventmasterData.presets = this.convertArrayToObject(res, 'presetSno')
 						}
 						resolve()
 					})
@@ -235,6 +245,7 @@ class BarcoInstance extends InstanceBase {
 			await Presets.catch((err) => {
 				this.log('error', 'EventMaster Presets Error: ' + err)
 			})
+			this.log('debug', JSON.stringify(this.eventmasterData.presets))
 		}
 	}
 	// Sources
