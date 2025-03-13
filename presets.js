@@ -73,6 +73,7 @@ module.exports = function getPresets(eventmasterData, log) {
 		feedbacks: [],
 	}
 	//Load presets from eventmaster into presets from companion
+	eventmasterData.presets = _.sortBy(eventmasterData.presets, 'presetSno')
 	Object.keys(eventmasterData.presets).forEach((key) => {
 		presets[`PVW_${eventmasterData.presets[key].id}`] = {
 			type: 'button',
