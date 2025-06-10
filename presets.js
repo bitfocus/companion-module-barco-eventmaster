@@ -88,9 +88,10 @@ module.exports = function getPresets(eventmasterData, log) {
 				{
 					down: [
 						{
-							actionId: 'preset_in_pvw',
+							actionId: 'recall_preset',
 							options: {
-								preset_in_pvw: eventmasterData.presets[key].id,
+								mode: '0', // 0 = PVW, 1 = PGM
+								id: eventmasterData.presets[key].id,
 							},
 						},
 					],
@@ -112,9 +113,10 @@ module.exports = function getPresets(eventmasterData, log) {
 				{
 					down: [
 						{
-							actionId: 'preset_in_pgm',
+							actionId: 'recall_preset',
 							options: {
-								preset_in_pgm: eventmasterData.presets[key].id,
+								mode: '1', // 0 = PVW, 1 = PGM
+								id: eventmasterData.presets[key].id,
 							},
 						},
 					],
@@ -151,10 +153,10 @@ module.exports = function getPresets(eventmasterData, log) {
 		}
 	})
 	// Create presets for all screen destinations
-	Object.keys(eventmasterData.screenDestinations).forEach((key) => {
-		presets[`test_pattern_Off_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+	Object.keys(eventmasterData.ScreenDestinations).forEach((key) => {
+		presets[`test_pattern_Off_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.off,
 			},
@@ -164,7 +166,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '0',
 							},
 						},
@@ -174,9 +176,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hor_ramp_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_hor_ramp_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.horizontal_ramp,
 			},
@@ -186,7 +188,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '1',
 							},
 						},
@@ -196,9 +198,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_ver_ramp_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_ver_ramp_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.vertical_ramp,
 			},
@@ -208,7 +210,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '2',
 							},
 						},
@@ -218,9 +220,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_100_bars_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_100_bars_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.bars100,
 			},
@@ -230,7 +232,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '3',
 							},
 						},
@@ -240,9 +242,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_16x16_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_16x16_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hatch16x16,
 			},
@@ -252,7 +254,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '4',
 							},
 						},
@@ -262,9 +264,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_32x32_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_32x32_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hatch32x32,
 			},
@@ -274,7 +276,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '5',
 							},
 						},
@@ -284,9 +286,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_Burst_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_Burst_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.burst,
 			},
@@ -296,7 +298,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '6',
 							},
 						},
@@ -306,9 +308,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_75_bars_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_75_bars_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.bars75,
 			},
@@ -318,7 +320,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '7',
 							},
 						},
@@ -328,9 +330,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_50_gray_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_50_gray_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.gray50,
 			},
@@ -340,7 +342,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '8',
 							},
 						},
@@ -350,9 +352,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hor_steps_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_hor_steps_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.horizontal_steps,
 			},
@@ -362,7 +364,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '9',
 							},
 						},
@@ -372,9 +374,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_ver_steps_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_ver_steps_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.vertical_steps,
 			},
@@ -384,7 +386,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '10',
 							},
 						},
@@ -394,9 +396,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_white_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_white_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.white,
 			},
@@ -406,7 +408,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '11',
 							},
 						},
@@ -416,9 +418,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_black_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_black_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.black,
 			},
@@ -428,7 +430,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '12',
 							},
 						},
@@ -438,9 +440,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_SMPTE_bars_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_SMPTE_bars_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.SMPTE_bars,
 			},
@@ -450,7 +452,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '13',
 							},
 						},
@@ -460,9 +462,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_h_alignment_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_h_alignment_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.h_align,
 			},
@@ -472,7 +474,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '14',
 							},
 						},
@@ -482,9 +484,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_v_alignment_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_v_alignment_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.v_align,
 			},
@@ -494,7 +496,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '15',
 							},
 						},
@@ -504,9 +506,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hv_alignment_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_hv_alignment_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hv_align,
 			},
@@ -516,7 +518,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '16',
 							},
 						},
@@ -526,9 +528,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_circle_alignment_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_circle_alignment_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.circle_align,
 			},
@@ -538,7 +540,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '17',
 							},
 						},
@@ -548,9 +550,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_red_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_red_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.red,
 			},
@@ -560,7 +562,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '18',
 							},
 						},
@@ -570,9 +572,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_green_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_green_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.green,
 			},
@@ -582,7 +584,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '19',
 							},
 						},
@@ -592,9 +594,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_blue_screen_aux_${eventmasterData.screenDestinations[key].id}`] = {
+		presets[`test_pattern_blue_screen_aux_${eventmasterData.ScreenDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.screenDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.ScreenDestinations[key].Name}`,
 			style: {
 				png64: testPattern.blue,
 			},
@@ -604,7 +606,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_SCREEN',
 							options: {
-								screenDestination: `${eventmasterData.screenDestinations[key].id}`,
+								screenDestination: `${eventmasterData.ScreenDestinations[key].id}`,
 								testPattern: '20',
 							},
 						},
@@ -616,10 +618,10 @@ module.exports = function getPresets(eventmasterData, log) {
 		}
 	})
 	// Create presets for all aux destinations
-	Object.keys(eventmasterData.auxDestinations).forEach((key) => {
-		presets[`test_pattern_Off_${eventmasterData.auxDestinations[key].id}`] = {
+	Object.keys(eventmasterData.AuxDestinations).forEach((key) => {
+		presets[`test_pattern_Off_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.off,
 			},
@@ -629,7 +631,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								screenDestination: `${eventmasterData.auxDestinations[key].id}`,
+								screenDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '0',
 							},
 						},
@@ -639,9 +641,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hor_ramp_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_hor_ramp_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.horizontal_ramp,
 			},
@@ -651,7 +653,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '1',
 							},
 						},
@@ -661,9 +663,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_ver_ramp_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_ver_ramp_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.vertical_ramp,
 			},
@@ -673,7 +675,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '2',
 							},
 						},
@@ -683,9 +685,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_100_bars_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_100_bars_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.bars100,
 			},
@@ -695,7 +697,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '3',
 							},
 						},
@@ -705,9 +707,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_16x16_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_16x16_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hatch16x16,
 			},
@@ -717,7 +719,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '4',
 							},
 						},
@@ -727,9 +729,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_32x32_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_32x32_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hatch32x32,
 			},
@@ -739,7 +741,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '5',
 							},
 						},
@@ -749,9 +751,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_Burst_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_Burst_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.burst,
 			},
@@ -761,7 +763,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '6',
 							},
 						},
@@ -771,9 +773,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_75_bars_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_75_bars_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.bars75,
 			},
@@ -783,7 +785,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '7',
 							},
 						},
@@ -793,9 +795,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_50_gray_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_50_gray_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.gray50,
 			},
@@ -805,7 +807,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '8',
 							},
 						},
@@ -815,9 +817,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hor_steps_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_hor_steps_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.horizontal_steps,
 			},
@@ -827,7 +829,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '9',
 							},
 						},
@@ -837,9 +839,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_ver_steps_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_ver_steps_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.vertical_steps,
 			},
@@ -849,7 +851,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '10',
 							},
 						},
@@ -859,9 +861,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_white_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_white_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.white,
 			},
@@ -871,7 +873,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '11',
 							},
 						},
@@ -881,9 +883,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_black_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_black_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.black,
 			},
@@ -893,7 +895,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '12',
 							},
 						},
@@ -903,9 +905,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_SMPTE_bars_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_SMPTE_bars_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.SMPTE_bars,
 			},
@@ -915,7 +917,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '13',
 							},
 						},
@@ -925,9 +927,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_h_alignment_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_h_alignment_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.h_align,
 			},
@@ -937,7 +939,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '14',
 							},
 						},
@@ -947,9 +949,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_v_alignment_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_v_alignment_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.v_align,
 			},
@@ -959,7 +961,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '15',
 							},
 						},
@@ -969,9 +971,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_hv_alignment_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_hv_alignment_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.hv_align,
 			},
@@ -981,7 +983,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '16',
 							},
 						},
@@ -991,9 +993,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_circle_alignment_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_circle_alignment_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.circle_align,
 			},
@@ -1003,7 +1005,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '17',
 							},
 						},
@@ -1013,9 +1015,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_red_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_red_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.red,
 			},
@@ -1025,7 +1027,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '18',
 							},
 						},
@@ -1035,9 +1037,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_green_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_green_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.green,
 			},
@@ -1047,7 +1049,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '19',
 							},
 						},
@@ -1057,9 +1059,9 @@ module.exports = function getPresets(eventmasterData, log) {
 			],
 			feedbacks: [],
 		}
-		presets[`test_pattern_blue_${eventmasterData.auxDestinations[key].id}`] = {
+		presets[`test_pattern_blue_${eventmasterData.AuxDestinations[key].id}`] = {
 			type: 'button',
-			category: `Test patterns for ${eventmasterData.auxDestinations[key].Name}`,
+			category: `Test patterns for ${eventmasterData.AuxDestinations[key].Name}`,
 			style: {
 				png64: testPattern.blue,
 			},
@@ -1069,7 +1071,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								auxDestination: `${eventmasterData.auxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '20',
 							},
 						},

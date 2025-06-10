@@ -1,25 +1,13 @@
 const EventMaster = require('barco-eventmaster')
-// const upgradeScripts = require('./upgrades')
-const { InstanceBase, InstanceStatus, Regex, combineRgb, runEntrypoint } = require('@companion-module/base')
+const { InstanceBase, InstanceStatus, Regex, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
 const getPresets = require('./presets')
 const _ = require('lodash')
+const { type } = require('os')
 
 class BarcoInstance extends InstanceBase {
-	/**
-	 * Create an instance of the module
-	 *
-	 * @param {EventEmitter} system - the brains of the operation
-	 * @param {string} id - the instance ID
-	 * @param {Object} config - saved user configuration parameters
-	 * @since 1.0.0
-	 */
 	constructor(internal) {
 		super(internal)
-	}
-
-	GetUpgradeScripts() {
-		return [upgradeScripts]
 	}
 
 	async init(config) {
@@ -28,12 +16,15 @@ class BarcoInstance extends InstanceBase {
 			presets: { 0: { id: 0, Name: 'no presets loaded yet' } },
 			sources: { 0: { id: 0, Name: 'no sources loaded yet', SrcType: 0 } },
 			cues: { 0: { id: 0, Name: 'no cues loaded yet' } },
-			auxDestinations: { 0: { id: 0, Name: 'no auxes loaded yet' } },
-			screenDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
+			userKeys: { 0: { id: 0, Name: 'no user keys loaded yet' } },
+			SuperAuxDestinations: { 0: { id: 0, Name: 'no auxes loaded yet' } },
+			AuxDestinations: { 0: { id: 0, Name: 'no auxes loaded yet' } },
+			ScreenDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
+			SuperDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
 		}
 		this.CHOICES_FREEZE = [
-			{ label: 'Freeze', id: '1' },
-			{ label: 'Unfreeze', id: '0' },
+			{ label: 'Freeze', id: 1 },
+			{ label: 'Unfreeze', id: 0 },
 		]
 		this.CHOICES_TESTPATTERN = [
 			{ label: 'Off', id: '0' },
@@ -58,10 +49,21 @@ class BarcoInstance extends InstanceBase {
 			{ label: 'Green', id: '19' },
 			{ label: 'Blue', id: '20' },
 		]
-
+		this.setVariableDefinitions([
+			{ variableId: 'frame_IP', name: 'Frame IP Address' },
+			{ variableId: 'frame_version', name: 'Frame Version' },
+			{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
+			{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
+			{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
+		])
+		this.powerStatus = [
+			'Power supply module is not present.',
+			'Power supply module is present, but there is no AC current detected.',
+			'Power supply module is present, and the AC current is detected, but there is no DC current.',
+			'Power supply module is present, and everything is OK.',
+		]
 		this.updateStatus(InstanceStatus.UnknownWarning)
 		this.connection()
-
 		this.log(`debug`, 'creating eventmaster')
 	}
 
@@ -70,18 +72,13 @@ class BarcoInstance extends InstanceBase {
 		this.connection()
 	}
 
-	/**
-	 * Connection
-	 */
 	connection() {
-		// Check for ability to ping the machine
 		if (this.config) {
 			ping.promise.probe(this.config.host).then((res) => {
 				if (res.alive) {
 					this.log(`debug`, 'ping ok')
 					this.initEventmaster()
 				} else {
-					// If ping fails, retry every 5 seconds
 					this.log(`debug`, 'ping failed')
 					this.updateStatus(InstanceStatus.Connecting, 'No ping response')
 					this.retry_interval = setInterval(() => {
@@ -100,42 +97,55 @@ class BarcoInstance extends InstanceBase {
 		}
 	}
 
-	/**
-	 * Init Eventmaster
-	 */
 	initEventmaster() {
+		console.log('Connecting to EventMaster at', this.config.host)
 		this.eventmaster = new EventMaster(this.config.host)
+		console.log('EventMaster instance created:', this.eventmaster)
 		this.updateStatus(InstanceStatus.Ok)
+		this.getFrameSettings()
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
 			this.setPresetDefinitions(getPresets(this.eventmasterData))
+
 			this.eventmasterPoller()
 		})
 		if (this.retry_interval) clearInterval(this.retry_interval)
 	}
 
-	/**
-	 * Create pollers for fetching data from Eventmaster
-	 */
+	getFrameSettings() {
+		this.eventmaster.getFrameSettings({}, (err, res) => {
+			if (err) this.log('error', 'EventMaster Error: ' + err)
+			else {
+				this.eventmasterData.frameIP = res.response.System.FrameCollection.Frame[0].Enet.IP
+				this.eventmasterData.version = res.response.System.FrameCollection.Frame[0].Version
+				this.eventmasterData.OSVersion = res.response.System.FrameCollection.Frame[0].OSVersion
+				this.setVariableValues({
+					frame_IP: this.eventmasterData.frameIP,
+					frame_version: this.eventmasterData.version,
+					frame_OSVersion: this.eventmasterData.OSVersion,
+				})
+			}
+		})
+	}
+	// Polling function to keep data updated
 	eventmasterPoller() {
 		if (this.config) {
 			if (this.config.pollingInterval === 0) {
 				if (this.polling_interval) clearInterval(this.polling_interval)
 			} else {
-				this.polling_interval = setInterval(() => {
-					this.getAllDataFromEventmaster().then(() => {
-						this.setActionDefinitions(this.getActions())
-						this.setPresetDefinitions(getPresets(this.eventmasterData))
-					})
-				}, Math.ceil(this.config.pollingInterval * 1000) || 5000)
+				this.polling_interval = setInterval(
+					() => {
+						this.getAllDataFromEventmaster().then(() => {
+							this.setActionDefinitions(this.getActions())
+							this.setPresetDefinitions(getPresets(this.eventmasterData))
+						})
+					},
+					Math.ceil(this.config.pollingInterval * 1000) || 15000
+				)
 			}
 		}
 	}
 
-	/**
-	 * Return config fields for web config
-	 * @returns config fields for web config
-	 */
 	getConfigFields() {
 		return [
 			{
@@ -155,44 +165,41 @@ class BarcoInstance extends InstanceBase {
 				regex: Regex.IP,
 			},
 			{
-				type: 'dropdown',
-				id: 'usermode',
-				label: 'Multiuser Mode',
-				width: 6,
-				default: 'userSingle',
-				choices: [
-					{ id: 'userSingle', label: 'Single User' },
-					{ id: 'operator', label: 'Multiuser Normal Operator' },
-					{ id: 'super_user', label: 'Multiuser Super Operator ' },
-				],
-			},
-			{
-				type: 'textinput',
-				id: 'superPassword',
-				label: 'Multiuser Super Operator Password',
-				width: 6,
-				default: '',
-			},
-			{
-				type: 'textinput',
-				id: 'operatorId',
-				label: 'Multiuser Operator Id (number)',
-				width: 6,
-				default: '0',
-			},
-			{
 				type: 'number',
 				id: 'pollingInterval',
 				label: 'Polling Interval (in seconds) for presets and actions (type 0 to disable)',
 				width: 6,
-				default: 5,
+				default: 15,
+			},
+			{
+				type: 'dropdown',
+				id: 'auth_mode',
+				label: 'Authentication Mode',
+				choices: [
+					{ id: 'none', label: 'None' },
+					{ id: 'operator', label: 'Operator ID' },
+					{ id: 'super_user', label: 'Super User Password' },
+				],
+				default: 'none',
+			},
+			{
+				type: 'textinput',
+				id: 'auth_value',
+				label: 'Auth Value',
+				width: 6,
+				isVisible: (config) => config.auth_mode !== 'none',
 			},
 		]
 	}
 
-	/**
-	 * When module gets deleted
-	 */
+	getAuthType() {
+		return this.config.auth_mode === 'none' ? undefined : this.config.auth_mode
+	}
+
+	getAuthValue() {
+		return this.config.auth_mode === 'none' ? undefined : this.config.auth_value
+	}
+
 	async destroy() {
 		if (this.retry_interval) clearInterval(this.retry_interval)
 		if (this.polling_interval) clearInterval(this.polling_interval)
@@ -200,368 +207,325 @@ class BarcoInstance extends InstanceBase {
 		this.log(`debug`, 'destroy')
 	}
 
-	/**
-	 * Converting a data array into an object
-	 * @param {*} arr
-	 * @returns Object
-	 */
 	convertArrayToObject = (arr, sortByField) => {
-		if(!arr) return {}
-
-		// Sort the array by the specified field if provided
+		if (!arr) return {}
 		if (sortByField) {
 			arr.sort((a, b) => {
-				if (a[sortByField] < b[sortByField]) return -1;
-				if (a[sortByField] > b[sortByField]) return 1;
-				return 0;
-			});
+				if (a[sortByField] < b[sortByField]) return -1
+				if (a[sortByField] > b[sortByField]) return 1
+				return 0
+			})
 		}
-
 		return arr.reduce((result, item) => {
 			result[item.id] = item
 			return result
 		}, {})
 	}
 
-	/**
-	 * Load all needed data from Eventmaster
-	 */
-	// Presets
+	// Data fetchers using new API
 	async getPresetsFromEventmaster() {
-		if (this.eventmaster !== undefined) {
-			// List of presets
-			const Presets = new Promise((resolve, reject) => {
-				this.eventmaster
-					.listPresets(-1, -1, (obj, res) => {
-						if (res !== undefined) {
-							this.eventmasterData.presets = this.convertArrayToObject(res, 'presetSno')
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listPresets(-1, -1, (err, result) => {
+						if (err) reject(err)
+						else {
+							resolve(result)
 						}
-						resolve()
 					})
-					.on('error', (err) => {
-						reject(err)
-					})
-			})
-			await Presets.catch((err) => {
+				})
+				this.eventmasterData.presets = this.convertArrayToObject(res.response, 'presetSno')
+			} catch (err) {
 				this.log('error', 'EventMaster Presets Error: ' + err)
-			})
-			this.log('debug', JSON.stringify(this.eventmasterData.presets))
+			}
 		}
 	}
-	// Sources
+
 	async getSourcesFromEventmaster() {
-		if (this.eventmaster !== undefined) {
-			// List of sources
-			const Sources = new Promise((resolve, reject) => {
-				this.eventmaster
-					.listSources(0, (obj, res) => {
-						if (res !== undefined) {
-							this.eventmasterData.sources = this.convertArrayToObject(res)
-						}
-						resolve()
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listSources((err, result) => {
+						if (err) reject(err)
+						else resolve(result)
 					})
-					.on('error', (err) => {
-						reject(err)
-					})
-			})
-			await Sources.catch((err) => {
+				})
+				this.eventmasterData.sources = this.convertArrayToObject(res.response, 'Name')
+			} catch (err) {
 				this.log('error', 'EventMaster Sources Error: ' + err)
-			})
+			}
 		}
 	}
-	// Cues
+
 	async getCuesFromEventmaster() {
-		if (this.eventmaster !== undefined) {
-			// List of Cues
-			const Cues = new Promise((resolve, reject) => {
-				this.eventmaster
-					.listCues(0, (obj, res) => {
-						if (res !== undefined) {
-							this.eventmasterData.cues = this.convertArrayToObject(res)
-						}
-						resolve()
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listCues({}, (err, result) => {
+						if (err) reject(err)
+						else resolve(result)
 					})
-					.on('error', (err) => {
-						reject(err)
-					})
-			})
-			await Cues.catch((err) => {
+				})
+				this.eventmasterData.cues = this.convertArrayToObject(res.response)
+			} catch (err) {
 				this.log('error', 'EventMaster Cues Error: ' + err)
-			})
+			}
 		}
 	}
-	// Destination
+
+	async getUserKeysFromEventmaster() {
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listUserKeys((err, result) => {
+						if (err) reject(err)
+						else resolve(result)
+					})
+				})
+				this.eventmasterData.userKeys = this.convertArrayToObject(res.response)
+			} catch (err) {
+				this.log('error', 'EventMaster UserKeys Error: ' + err)
+			}
+		}
+	}
+
 	async getDestinationsFromEventmaster() {
-		if (this.eventmaster !== undefined) {
-			// List of destinations
-			const Destinations = new Promise((resolve, reject) => {
-				this.eventmaster
-					.listDestinations(0, (obj, res) => {
-						if (res !== undefined) {
-							this.eventmasterData.screenDestinations = this.convertArrayToObject(res.ScreenDestination)
-							this.eventmasterData.auxDestinations = this.convertArrayToObject(res.AuxDestination)
-						}
-						resolve()
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listDestinations(0, (err, result) => {
+						if (err) reject(err)
+						else resolve(result)
 					})
-					.on('error', (err) => {
-						reject(err)
-					})
-			})
-
-			await Destinations.catch((err) => {
+				})
+				this.eventmasterData.ScreenDestinations = this.convertArrayToObject(res.response.ScreenDestination)
+				this.eventmasterData.AuxDestinations = this.convertArrayToObject(res.response.AuxDestination)
+				this.eventmasterData.SuperDestinations = this.convertArrayToObject(res.response.SuperDestination)
+				this.eventmasterData.SuperAuxDestinations = this.convertArrayToObject(res.response.SuperAux)
+			} catch (err) {
 				this.log('error', 'EventMaster Destinations Error: ' + err)
-			})
+			}
 		}
 	}
+
+	async getPowerStatusFromEventmaster() {
+		this.eventmaster.powerStatus((err, res) => {
+			if (err) this.log('error', 'EventMaster Error: ' + err)
+			else {
+				const key = Object.keys(res.response)[0]
+				this.setVariableValues({
+					power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
+					power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
+				})
+			}
+		})
+	}
+
 	async getAllDataFromEventmaster() {
-		await this.getPresetsFromEventmaster().catch((err) => {
-			this.log('error', err)
-		})
-		await this.getSourcesFromEventmaster().catch((err) => {
-			this.log('error', err)
-		})
-		await this.getCuesFromEventmaster().catch((err) => {
-			this.log('error', err)
-		})
-		await this.getDestinationsFromEventmaster().catch((err) => {
-			this.log('error', err)
-		})
+		console.log('Fetching all data from EventMaster...')
+		await this.getPresetsFromEventmaster()
+		await this.getSourcesFromEventmaster()
+		await this.getCuesFromEventmaster()
+		await this.getDestinationsFromEventmaster()
+		await this.getUserKeysFromEventmaster()
+		await this.getPowerStatusFromEventmaster()
 	}
-	/**
-	 * Get all the actions
-	 * @returns actions
-	 */
+
 	getActions() {
-		// Needed for user level stuff
-		const user = this.config.usermode
-		const password = this.config.superPassword
-		const id = this.config.operatorId
-		// this.log('debug'`${user}, ${password}, ${id}`)
-		const actions = {} // main array
+		const actions = {}
 
-		// Load all preset data
-		let CHOICES_PRESETS = []
-		Object.keys(this.eventmasterData.presets).forEach((key) => {
-			// console.log(key, this.eventmasterData.presets[key])
-			CHOICES_PRESETS.push({
-				label: this.eventmasterData.presets[key].presetSno + ' ' + _.unescape(this.eventmasterData.presets[key].Name),
-				id: this.eventmasterData.presets[key].id,
-				sort: this.eventmasterData.presets[key].presetSno,
-			})
-		})
-		let CHOICES_SOURCES = []
-		Object.keys(this.eventmasterData.sources).forEach((key) => {
-			// console.log(key, this.eventmasterData.presets[key])
-			CHOICES_SOURCES.push({
-				label: this.eventmasterData.sources[key].Name,
-				id: this.eventmasterData.sources[key].id,
-				InputCfgIndex: this.eventmasterData.sources[key].InputCfgIndex,
-				SrcType: this.eventmasterData.sources[key].SrcType,
-				StillIndex: this.eventmasterData.sources[key].StillIndex,
-			})
-		})
-		let CHOICES_CUES = []
-		Object.keys(this.eventmasterData.cues).forEach((key) => {
-			// console.log(key, this.eventmasterData.presets[key])
-			CHOICES_CUES.push({
-				label: this.eventmasterData.cues[key].Name,
-				id: this.eventmasterData.cues[key].id,
-			})
-		})
+		const CHOICES_PRESETS = Object.values(this.eventmasterData.presets).map((preset) => ({
+			label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
+			id: preset.id,
+			sort: preset.presetSno || preset.id,
+		}))
+		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => ({
+			label: source.Name,
+			id: source.id,
+			InputCfgIndex: source.InputCfgIndex,
+			SrcType: source.SrcType,
+			StillIndex: source.StillIndex,
+		}))
+		const CHOICES_CUES = Object.values(this.eventmasterData.cues).map((cue) => ({
+			label: cue.Name,
+			id: cue.id,
+		}))
+		const CHOICES_USERKEYS = Object.values(this.eventmasterData.userKeys).map((key) => ({
+			label: key.Name,
+			id: key.id,
+		}))
+		const CHOICES_SCREENDESTINATIONS = Object.values(this.eventmasterData.ScreenDestinations).map((dest) => ({
+			label: dest.Name,
+			id: dest.id,
+		}))
+		const CHOICES_AUXDESTINATIONS = Object.values(this.eventmasterData.AuxDestinations).map((dest) => ({
+			label: dest.Name,
+			id: dest.id,
+		}))
+		// const CHOICES_SUPERDESTINATIONS = Object.values(this.eventmasterData.SuperDestinations).map((dest) => ({
+		// 	label: dest.Name,
+		// 	id: dest.id,
+		// }))
+		// const CHOICES_SUPERAUXS = Object.values(this.eventmasterData.SuperAux).map((dest) => ({
+		// 	label: dest.Name,
+		// 	id: dest.id,
+		// }))
 
-		let CHOICES_SCREENDESTINATIONS = []
-		Object.keys(this.eventmasterData.screenDestinations).forEach((key) => {
-			// console.log(key, this.eventmasterData.presets[key])
-			CHOICES_SCREENDESTINATIONS.push({
-				label: this.eventmasterData.screenDestinations[key].Name,
-				id: this.eventmasterData.screenDestinations[key].id,
-			})
-		})
-
-		let CHOICES_AUXDESTINATIONS = []
-		Object.keys(this.eventmasterData.auxDestinations).forEach((key) => {
-			// console.log(key, this.eventmasterData.auxDestinations[key])
-			CHOICES_AUXDESTINATIONS.push({
-				label: this.eventmasterData.auxDestinations[key].Name,
-				id: this.eventmasterData.auxDestinations[key].id,
-			})
-		})
-
-		actions['preset_in_pvw'] = {
-			name: 'Preset in PVW',
+		// Recall Preset ***TESTED
+		actions.recall_preset = {
+			name: 'Recall Preset',
 			options: [
 				{
 					type: 'dropdown',
 					label: 'Preset',
-					id: 'preset_in_pvw',
-					minChoicesForSearch: 5,
-					choices: CHOICES_PRESETS.sort((a, b) => a.sort - b.sort),
-					default: '0',
+					id: 'id',
+					choices: CHOICES_PRESETS,
 				},
-			],
-			callback: (action) => {
-				this.log('info', 'Recall to PVW id:' + action.options.preset_in_pvw)
-
-				if (this.eventmaster !== undefined) {
-					if (user == 'operator') {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pvw), 0, user, id, (obj, res) => {
-								this.log('debug', 'recall preset pvw response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else if (user == 'super_user') {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pvw), 0, user, password, (obj, res) => {
-								this.log('debug', 'recall preset pvw response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pvw), 0, user, (obj, res) => {
-								this.log('debug', 'recall preset pvw response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					}
-				}
-			},
-		}
-		actions['preset_in_pgm'] = {
-			name: 'Preset in PGM',
-			options: [
 				{
 					type: 'dropdown',
-					label: 'Preset',
-					id: 'preset_in_pgm',
-					minChoicesForSearch: 5,
-					choices: CHOICES_PRESETS.sort((a, b) => a.sort - b.sort),
-					default: '0',
+					label: 'Mode',
+					id: 'mode',
+					choices: [
+						{ id: '0', label: 'Preview' },
+						{ id: '1', label: 'Program' },
+					],
 				},
 			],
 			callback: (action) => {
-				this.log('info', 'Recall to PGM id:' + action.options.preset_in_pgm)
+				const params = {
+					id: action.options.id,
+					type: action.options.mode,
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				console.log('Recalling Preset with params:', params)
+				this.eventmaster.activatePresetById(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'recall preset response: ' + JSON.stringify(res))
+				})
+			},
+		}
 
-				if (this.eventmaster !== undefined) {
-					if (user == 'operator') {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pgm), 1, user, id, (obj, res) => {
-								this.log('debug', 'recall preset pgm response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else if (user == 'super_user') {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pgm), 1, user, password, (obj, res) => {
-								this.log('debug', 'recall preset pgm response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else {
-						this.eventmaster
-							.activatePresetById(parseInt(action.options.preset_in_pgm), 1, user, null, (obj, res) => {
-								this.log('debug', 'recall preset pgm response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					}
-				}
-			},
-		}
-		actions['trans_all'] = {
-			name: 'Take/Trans Active',
-			options: [],
-			callback: () => {
-				this.log('info', 'Trans/Take All')
-				if (this.eventmaster !== undefined) {
-					if (user == 'operator') {
-						this.eventmaster
-							.allTrans(user, id, (obj, res) => {
-								this.log('debug', 'trans all response: ' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else if (user == 'super_user') {
-						this.eventmaster
-							.allTrans(user, password, (obj, res) => {
-								this.log('debug', 'trans all response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else {
-						this.eventmaster
-							.allTrans(user, (obj, res) => {
-								this.log('debug', 'trans all response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					}
-				}
-			},
-		}
-		actions['cut_all'] = {
-			name: 'Cut Active',
-			options: [],
-			callback: () => {
-				this.log('info', 'Cut All')
-
-				if (this.eventmaster !== undefined) {
-					if (user == 'operator') {
-						this.eventmaster
-							.cut(user, id, (obj, res) => {
-								this.log('debug', 'cut all response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else if (user == 'super_user') {
-						this.eventmaster
-							.cut(user, password, (obj, res) => {
-								this.log('debug', 'cut all response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					} else {
-						this.eventmaster
-							.cut(user, (obj, res) => {
-								this.log('debug', 'cut all response' + res)
-							})
-							.on('error', (err) => {
-								this.log('error', 'EventMaster Error: ' + err)
-							})
-					}
-				}
-			},
-		}
+		// Recall Next Preset ***TESTED
 		actions['recall_next'] = {
 			name: 'Recall Next Preset',
 			options: [],
 			callback: () => {
-				this.log('info', 'recall_next')
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.recallNextPreset((obj, res) => {
-							this.log('debug', 'recall next response' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
+				this.eventmaster.recallNextPreset((err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'recall next response: ' + JSON.stringify(res))
+				})
 			},
 		}
-		actions['frzSource'] = {
+
+		// Cut Active ***TESTED
+		actions['cut_all'] = {
+			name: 'Cut Active',
+			options: [],
+			callback: () => {
+				const params = {
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				this.eventmaster.cut(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'cut all response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Take/Trans Active ***TESTED
+		actions['trans_all'] = {
+			name: 'Take/Trans Active',
+			options: [],
+			callback: () => {
+				const params = {
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				this.eventmaster.allTrans(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'trans all response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Play Cue ***TESTED
+		actions['play_cue'] = {
+			name: 'Play Cue',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Cue',
+					id: 'cueNumber',
+					minChoicesForSearch: 5,
+					choices: CHOICES_CUES,
+					default: '0',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.cueNumber),
+					type: 0, // 0 for Play
+				}
+				this.eventmaster.activateCue(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateCue response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Stop Cue ***TESTED
+		actions['stop_cue'] = {
+			name: 'Stop Cue',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Cue',
+					id: 'cueNumber',
+					minChoicesForSearch: 5,
+					choices: CHOICES_CUES,
+					default: '0',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.cueNumber),
+					type: 2, // 2 for Stop
+				}
+				this.eventmaster.activateCue(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateCue response: ' + JSON.stringify(res))
+				})
+			},
+		}
+		// Pause Cue
+		actions['pause_cue'] = {
+			name: 'Pause Cue',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Cue',
+					id: 'cueNumber',
+					minChoicesForSearch: 5,
+					choices: CHOICES_CUES,
+					default: '0',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.cueNumber),
+					type: 1, // 1 for Pause
+				}
+				this.eventmaster.activateCue(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateCue response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Freeze/Unfreeze Source ***TESTED
+		actions['frz_Source'] = {
 			name: 'Freeze/Unfreeze Source',
 			options: [
 				{
@@ -569,7 +533,7 @@ class BarcoInstance extends InstanceBase {
 					label: 'freeze/unfreeze',
 					id: 'frzType',
 					choices: this.CHOICES_FREEZE,
-					default: '1',
+					default: 1,
 				},
 				{
 					type: 'dropdown',
@@ -581,331 +545,20 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				this.log('info', '(un)freeze')
+				const params = {
+					type: 0, // 1 type is source
+					id: parseInt(action.options.frzSource),
+					Screengroup: 0, // 0 for all screengroups
+					mode: parseInt(action.options.frzType), // 1 for freeze, 0 for unfreeze
+				}
+				this.eventmaster.freezeDestSource(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', '(un)freeze response: ' + JSON.stringify(res))
+				})
+			},
+		}
 
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.freezeDestSource(
-							0,
-							parseInt(action.options.frzSource),
-							0,
-							parseInt(action.options.frzType),
-							(obj, res) => {
-								this.log('debug', '(un)freeze all response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['frzScreenDest'] = {
-			name: 'Freeze/Unfreeze Screen Destination',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'freeze/unfreeze',
-					id: 'frzType',
-					choices: this.CHOICES_FREEZE,
-					default: '1',
-				},
-				{
-					type: 'dropdown',
-					label: 'Screen Destination',
-					id: 'frzDest',
-					choices: CHOICES_SCREENDESTINATIONS,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log('info', '(un)freeze Screen Destination')
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.freezeDestSource(2, parseInt(action.options.frzDest), 0, parseInt(action.options.frzType), (obj, res) => {
-							this.log('debug', 'freeze all response' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['frzAuxDest'] = {
-			name: 'Freeze/Unfreeze Aux Destination',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'freeze/unfreeze',
-					id: 'frzType',
-					choices: this.CHOICES_FREEZE,
-					default: '1',
-				},
-				{
-					type: 'dropdown',
-					label: 'Aux Destination',
-					id: 'frzDest',
-					choices: CHOICES_AUXDESTINATIONS,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log('info', '(un)freeze Aux Destination')
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.freezeDestSource(3, parseInt(action.options.frzDest), 0, parseInt(action.options.frzType), (obj, res) => {
-							this.log('debug', 'freeze all response' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['play_cue'] = {
-			name: 'Play cue',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'cue',
-					id: 'cueNumber',
-					minChoicesForSearch: 5,
-					choices: CHOICES_CUES,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log('info', 'play_cue:' + action.options.cueNumber)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.activateCueById(parseInt(action.options.cueNumber), 0, (obj, res) => {
-							this.log('debug', 'activateCue response' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['stop_cue'] = {
-			name: 'Stop cue',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'cue',
-					id: 'cueNumber',
-					minChoicesForSearch: 5,
-					choices: CHOICES_CUES,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log('info', 'stop_cue:' + action.options.cueNumber)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.activateCueById(parseInt(action.options.cueNumber), 2, (obj, res) => {
-							this.log('debug', 'activateCue response' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['change_aux'] = {
-			name: 'Change aux on destination',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'Source',
-					id: 'source',
-					minChoicesForSearch: 5,
-					choices: CHOICES_SOURCES,
-					default: '0',
-				},
-				{
-					type: 'dropdown',
-					label: 'Destination',
-					id: 'auxDestination',
-					choices: CHOICES_AUXDESTINATIONS,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log('info', `change_aux, source: ${action.options.source} destination ${action.options.auxDestination}`)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.changeAuxContent(
-							parseInt(action.options.auxDestination),
-							-1,
-							parseInt(action.options.source),
-							(obj, res) => {
-								this.log('debug', 'changeAuxContent response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['armUnarmDestination'] = {
-			name: 'arm screen destinations',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'arm/un-arm',
-					id: 'armUnarm',
-					choices: [
-						{ label: 'arm', id: 1 },
-						{ label: 'disarm', id: 0 },
-					],
-					default: '1',
-				},
-				{
-					type: 'dropdown',
-					label: 'destination',
-					id: 'screenDestinations',
-					choices: CHOICES_SCREENDESTINATIONS,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log(
-					'info',
-					`armUnarmDestination, arm/unarm ${action.options.armUnarm}, destination ${action.options.screenDestinations}`
-				)
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.armUnarmDestination(
-							parseInt(action.options.armUnarm),
-							{ id: action.options.screenDestinations },
-							null,
-							(obj, res) => {
-								this.log('debug', 'armUnarmDestination response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'Eventmaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['armUnarmAuxDestination'] = {
-			name: 'arm aux destinations',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'arm/un-arm',
-					id: 'armUnarm',
-					choices: [
-						{ label: 'arm', id: 1 },
-						{ label: 'disarm', id: 0 },
-					],
-					default: '1',
-				},
-				{
-					type: 'dropdown',
-					label: 'destination',
-					id: 'auxDestinations',
-					choices: CHOICES_AUXDESTINATIONS,
-					default: '0',
-				},
-			],
-			callback: (action) => {
-				this.log(
-					'info',
-					`armUnarmAuxDestination, arm/unarm ${action.options.armUnarm}, destination ${action.options.auxDestinations}`
-				)
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.armUnarmDestination(
-							parseInt(action.options.armUnarm),
-							null,
-							{ id: action.options.auxDestinations },
-							(obj, res) => {
-								this.log('debug', 'armUnarmAuxDestination response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'Eventmaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['subscribe'] = {
-			label: 'subscribe to SourceChanged',
-			options: [
-				{
-					type: 'textinput',
-					label: 'IP to send JSON to',
-					id: 'ip',
-					regex: this.REGEX_IP,
-				},
-				{
-					type: 'textinput',
-					label: 'Portnumber',
-					id: 'port',
-				},
-			],
-			callback: (action) => {
-				this.log('info', `subscribe to localhost`)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.subscribe(
-							action.options.ip,
-							action.options.port,
-							['SourceChanged', 'BGSourceChanged', 'ScreenDestChanged', 'AUXDestChanged'],
-							(obj, res) => {
-								this.log('debug', 'subscribe response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
-		actions['unsubscribe'] = {
-			label: 'unsubscribe to SourceChanged',
-			options: [
-				{
-					type: 'textinput',
-					label: 'IP to send JSON to',
-					id: 'ip',
-					regex: this.REGEX_IP,
-				},
-				{
-					type: 'textinput',
-					label: 'Portnumber',
-					id: 'port',
-				},
-			],
-			callback: (action) => {
-				this.log('info', `unsubscribe`)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.unsubscribe(
-							action.options.ip,
-							action.options.port,
-							['SourceChanged', 'BGSourceChanged', 'ScreenDestChanged', 'AUXDestChanged'],
-							(obj, res) => {
-								this.log('debug', 'unsubscribe response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
-			},
-		}
+		// Set testpattern for AUX ***TESTED
 		actions['testpattern_on_AUX'] = {
 			name: 'Set testpattern for AUX',
 			options: [
@@ -923,26 +576,18 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				this.log(
-					'info',
-					`change_testAuxPattern, id: ${action.options.testPattern} destination ${action.options.auxDestination}`
-				)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.changeAuxContentTestPattern(
-							parseInt(action.options.auxDestination),
-							parseInt(action.options.testPattern),
-							(obj, res) => {
-								this.log('debug','changeAuxContentTestPattern response' + JSON.stringify(res))
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
+				const params = {
+					id: parseInt(action.options.auxDestination),
+					TestPattern: parseInt(action.options.testPattern),
 				}
+				this.eventmaster.changeAuxContent(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'changeAuxContentTestPattern response: ' + JSON.stringify(res))
+				})
 			},
 		}
+
+		// Set testpattern for screen destinations  ***TESTED
 		actions['testpattern_on_SCREEN'] = {
 			name: 'Set testpattern for screen destinations',
 			options: [
@@ -960,163 +605,493 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				this.log(
-					'info',
-					`change_testPattern, id: ${action.options.testPattern} destination ${action.options.screenDestination}`
-				)
-
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.changeContentTestPattern(
-							parseInt(action.options.screenDestination),
-							parseInt(action.options.testPattern),
-							(obj, res) => {
-								this.log('debug','changeAuxContentTestPattern response' + JSON.stringify(res))
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
+				const params = {
+					id: parseInt(action.options.screenDestination),
+					TestPattern: parseInt(action.options.testPattern),
 				}
+				this.eventmaster.changeContent(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'changeContentTestPattern response: ' + JSON.stringify(res))
+				})
 			},
 		}
-		actions['activateSourceMainBackup'] = {
-			name: 'Configure Main/Backup',
+
+		// Reset Frame Settings
+		actions['reset_frame'] = {
+			name: 'Reset Frame Settings',
 			options: [
 				{
 					type: 'dropdown',
-					label: 'Source',
-					id: 'source',
-					choices: CHOICES_SOURCES,
-					default: '0',
-				},
-				{
-					type: 'dropdown',
-					label: 'Backup 1',
-					id: 'backup1',
-					choices: CHOICES_SOURCES,
-					default: '0',
-				},
-				{
-					type: 'dropdown',
-					label: 'Backup 2',
-					id: 'backup2',
-					choices: CHOICES_SOURCES,
-					default: '0',
-				},
-				{
-					type: 'dropdown',
-					label: 'Backup 3',
-					id: 'backup3',
-					choices: CHOICES_SOURCES,
-					default: '0',
-				},
-				{
-					type: 'dropdown',
-					label: 'Backup state',
-					id: 'BackUpState',
+					label: 'Reset Type',
+					id: 'resetType',
 					choices: [
-						{ id: '-1', label: 'Primary' },
-						{ id: '0', label: 'Backup 1' },
-						{ id: '1', label: 'Backup 2' },
-						{ id: '2', label: 'Backup 3' },
+						{ id: 0, label: 'Soft reset' },
+						{ id: 1, label: 'Factory reset' },
+						{ id: 2, label: 'Factory reset (save IP)' },
+						{ id: 3, label: 'Factory reset (save IP/EDID)' },
+						{ id: 4, label: 'Factory reset (save VPID)' },
+						{ id: 5, label: 'Power Down' },
 					],
-					default: '-1',
+					default: 0,
 				},
 			],
 			callback: (action) => {
-				let source = parseInt(action.options.source)
-				let backup1 = parseInt(action.options.backup1)
-				let backup2 = parseInt(action.options.backup2)
-				let backup3 = parseInt(action.options.backup3)
-				let BackUpState = parseInt(action.options.BackUpState)
-				let backup1_ScrType = 0
-				let backup2_ScrType = 0
-				let backup3_ScrType = 0
-				let source_InputCfgIndex = 0
-				let backup1_InputCfgIndex = 0
-				let backup2_InputCfgIndex = 0
-				let backup3_InputCfgIndex = 0
-				CHOICES_SOURCES.forEach((iterator) => {
-					if (source === iterator.id) {
-						source_InputCfgIndex = iterator.InputCfgIndex
-					}
-					if (backup1 === iterator.id) {
-						backup1_ScrType = iterator.SrcType
-						if (backup1_ScrType === 1) {
-							backup1_InputCfgIndex = iterator.StillIndex
-						} else {
-							backup1_InputCfgIndex = iterator.InputCfgIndex
-						}
-					}
-					if (backup2 === iterator.id) {
-						backup2_ScrType = iterator.SrcType
-						if (backup2_ScrType === 1) {
-							backup2_InputCfgIndex = iterator.StillIndex
-						} else {
-							backup2_InputCfgIndex = iterator.InputCfgIndex
-						}
-					}
-					if (backup3 === iterator.id) {
-						backup3_ScrType = iterator.SrcType
-						if (backup3_ScrType === 1) {
-							backup3_InputCfgIndex = iterator.StillIndex
-						} else {
-							backup3_InputCfgIndex = iterator.InputCfgIndex
-						}
-					}
+				this.eventmaster.resetFrameSettings(parseInt(action.options.resetType), (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'resetFrameSettings response: ' + JSON.stringify(res))
 				})
-				if (this.eventmaster !== undefined) {
-					this.log(
-						'debug',
-						`activateSourceMainBackup: Source:${source_InputCfgIndex}, [BU1Type:${backup1_ScrType}, BU1 ${backup1_InputCfgIndex}], [BU2Type:${backup2_ScrType}, BU2 ${backup2_InputCfgIndex}], [BU3Type:${backup3_ScrType}, BU3 ${backup3_InputCfgIndex}], State:${BackUpState}`
-					)
-					this.eventmaster
-						.activateSourceMainBackup(
-							source_InputCfgIndex,
-							backup1_ScrType,
-							backup1_InputCfgIndex,
-							backup2_ScrType,
-							backup2_InputCfgIndex,
-							backup3_ScrType,
-							backup3_InputCfgIndex,
-							BackUpState,
-							(obj, res) => {
-								this.log('debug','activateSourceMainBackup response' + res)
-							}
-						)
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
-				}
 			},
 		}
-		actions['destinationGroup'] = {
-			name: 'Activate Destination Group (Count from 0)',
+
+		// Power Status ***TESTED
+		actions['power_status'] = {
+			name: 'Get Power Status',
+			options: [],
+			callback: () => {
+				this.eventmaster.powerStatus((err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else {
+						this.log('debug', 'powerStatus response: ' + JSON.stringify(res))
+						const key = Object.keys(res.response)[0]
+						this.setVariableValues({
+							power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
+							power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
+						})
+					}
+				})
+			},
+		}
+
+		// Save Preset ***TESTED
+		actions['save_preset'] = {
+			name: 'Save Preset',
 			options: [
 				{
 					type: 'textinput',
-					label: 'id of destination',
-					id: 'id',
-					default: '0',
+					label: 'Preset Name',
+					id: 'presetName',
+					default: '',
 				},
 			],
 			callback: (action) => {
-				this.log('info', `destinationGroup: ${action.options.id}`)
-				if (this.eventmaster !== undefined) {
-					this.eventmaster
-						.activateDestGroup(parseInt(action.options.id), (obj, res) => {
-							this.log('debug', 'activateDestGroup response ' + res)
-						})
-						.on('error', (err) => {
-							this.log('error', 'EventMaster Error: ' + err)
-						})
+				const params = {
+					presetName: action.options.presetName,
+					ScreenDestinations: [],
+					AuxDestinations: [],
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
 				}
+				this.eventmaster.savePreset(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'savePreset response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Delete Preset ***TESTED
+		actions['delete_preset'] = {
+			name: 'Delete Preset',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Preset',
+					id: 'preset_to_delete',
+					choices: CHOICES_PRESETS,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.preset_to_delete),
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				this.eventmaster.deletePreset(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'deletePreset response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Rename Preset ***TESTED
+		actions['rename_preset'] = {
+			name: 'Rename Preset',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Preset',
+					id: 'preset_to_rename',
+					choices: CHOICES_PRESETS,
+				},
+				{
+					type: 'textinput',
+					label: 'New Name',
+					id: 'newPresetName',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.preset_to_rename),
+					newPresetName: action.options.newPresetName,
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				this.eventmaster.renamePreset(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'renamePreset response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Fill Layers to Screen Destination ***TESTED
+		actions['fill_hv'] = {
+			name: 'Fit Layers to Screen Destination',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen Destination',
+					id: 'screenDest',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+				{
+					type: 'textinput',
+					label: 'Layer IDs (comma separated)',
+					id: 'layerIds',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const layers = action.options.layerIds.split(',').map((id) => ({ id: parseInt(id.trim()) }))
+				this.eventmaster.fillHV(parseInt(action.options.screenDest), layers, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'fillHV response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Clear Layers from Screen Destination ***TESTED
+		actions['clear_layers'] = {
+			name: 'Clear Layers from Screen Destination',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen Destination',
+					id: 'screenDest',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+				{
+					type: 'textinput',
+					label: 'Layer IDs (comma separated)',
+					id: 'layerIds',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const layers = action.options.layerIds.split(',').map((id) => ({ id: parseInt(id.trim()) }))
+				this.eventmaster.clearLayers(parseInt(action.options.screenDest), layers, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'clearLayers response: ' + JSON.stringify(res))
+				})
+			},
+		}
+		// Recall User Key ***TESTED
+		actions['recall_userkey'] = {
+			name: 'Recall User Key',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'User Key',
+					id: 'userKeyId',
+					choices: CHOICES_USERKEYS || [],
+				},
+				{
+					type: 'dropdown',
+					label: 'Screen Destinations',
+					id: 'screenDest',
+					choices: CHOICES_SCREENDESTINATIONS,
+					isMulti: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Layer IDs (comma separated)',
+					id: 'layerIds',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.userKeyId),
+					ScreenDestination: [parseInt(action.options.screenDest)],
+					Layer: action.options.layerIds.split(',').map((id) => parseInt(id.trim())),
+					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
+					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
+				}
+				this.eventmaster.recallUserKey(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'recallUserKey response: ' + JSON.stringify(res))
+				})
+			},
+		}
+		// actions['list_stills'] = {
+		// 	name: 'List Still Stores',
+		// 	options: [],
+		// 	callback: () => {
+		// 		this.eventmaster.listStill((err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else this.log('debug', 'listStill response: ' + JSON.stringify(res))
+		// 		})
+		// 	},
+		// }
+		// actions['delete_still'] = {
+		// 	name: 'Delete Still',
+		// 	options: [
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'Still Store',
+		// 			id: 'stillId',
+		// 			choices: CHOICES_STILLS || [],
+		// 		},
+		// 	],
+		// 	callback: (action) => {
+		// 		this.eventmaster.deleteStill(parseInt(action.options.stillId), (err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else this.log('debug', 'deleteStill response: ' + JSON.stringify(res))
+		// 		})
+		// 	},
+		// }
+		// actions['take_still'] = {
+		// 	name: 'Capture Still',
+		// 	options: [
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'Source Type',
+		// 			id: 'srcType',
+		// 			choices: [
+		// 				{ id: 0, label: 'Input Source' },
+		// 				{ id: 1, label: 'Background Source' },
+		// 			],
+		// 		},
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'Source ID',
+		// 			id: 'srcId',
+		// 			choices: CHOICES_SOURCES,
+		// 		},
+		// 		{
+		// 			type: 'number',
+		// 			label: 'Still Store Index',
+		// 			id: 'fileId',
+		// 			default: 0,
+		// 		},
+		// 	],
+		// 	callback: (action) => {
+		// 		this.eventmaster.takeStill(
+		// 			parseInt(action.options.srcType),
+		// 			parseInt(action.options.srcId),
+		// 			parseInt(action.options.fileId),
+		// 			(err, res) => {
+		// 				if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 				else this.log('debug', 'takeStill response: ' + JSON.stringify(res))
+		// 			}
+		// 		)
+		// 	},
+		// }
+		// List Operators ***TESTED
+		actions['list_operators'] = {
+			name: 'List Operators',
+			options: [],
+			callback: () => {
+				this.eventmaster.listOperators((err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'listOperators response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// List MVR Presets ***NEW API
+		actions['list_mvr_presets'] = {
+			name: 'List MVR Presets',
+			options: [],
+			callback: () => {
+				this.eventmaster.listMvrPreset({ id: -1 }, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'listMvrPreset response: ' + JSON.stringify(res))
+				})
+			},
+		}
+		actions['getFrameSettings'] = {
+			name: 'Get Frame Settings',
+			options: [],
+			callback: () => {
+				this.eventmaster.getFrameSettings({}, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else {
+						// this.log('debug', 'listMvrPreset response: ' + JSON.stringify(res))
+						// const key = Object.keys(res.response.System.FrameCollection)[0]
+						this.eventmasterData.frameIP = res.response.System.FrameCollection.Frame[0].Enet.IP
+						this.eventmasterData.version = res.response.System.FrameCollection.Frame[0].Version
+						this.eventmasterData.OSVersion = res.response.System.FrameCollection.Frame[0].OSVersion
+						this.setVariableValues({
+							frame_IP: this.eventmasterData.frameIP,
+							frame_version: this.eventmasterData.version,
+							frame_OSVersion: this.eventmasterData.OSVersion,
+						})
+					}
+				})
+			},
+		}
+
+		// Activate MVR Preset ***NEW API
+		actions['activate_mvr_preset'] = {
+			name: 'Activate MVR Preset',
+			options: [
+				{
+					type: 'number',
+					label: 'MVR Preset ID',
+					id: 'mvrPresetId',
+					default: 0,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.mvrPresetId),
+				}
+				this.eventmaster.activateMvrPreset(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateMvrPreset response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Change MVR Layout ***NEW API/TESTED
+		actions['mvr_layout_change'] = {
+			name: 'Change MVR Layout',
+			options: [
+				{
+					type: 'number',
+					label: 'MVR ID',
+					id: 'mvrId',
+					default: 0,
+				},
+				{
+					type: 'number',
+					label: 'Layout ID',
+					id: 'layoutId',
+					default: 0,
+				},
+
+				{
+					type: 'number',
+					label: 'Frame Unit ID',
+					id: 'frameUnitId',
+					default: 0,
+					regex: Regex.NUMBER,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					frameUnitId: parseInt(action.options.frameUnitId),
+					mvrId: parseInt(action.options.mvrId),
+					mvrLayoutId: parseInt(action.options.layoutId),
+				}
+				this.eventmaster.mvrLayoutChange(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'mvrLayoutChange response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Activate Destination Group ***TESTED
+		actions['activate_dest_group'] = {
+			name: 'Activate Destination Group',
+			options: [
+				{
+					type: 'textinput',
+					label: 'Group ID or Name',
+					id: 'groupIdOrName',
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					...(isNaN(action.options.groupIdOrName)
+						? { destGrpName: action.options.groupIdOrName }
+						: { id: parseInt(action.options.groupIdOrName) }),
+				}
+				this.eventmaster.activateDestGroup(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateDestGroup response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Arm/Unarm Destination ***TESTED
+		actions['arm_unarm_destination'] = {
+			name: 'Arm/Unarm Destination',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Destination',
+					id: 'destId',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+				{
+					type: 'dropdown',
+					label: 'Arm (true) or Unarm (false)',
+					id: 'arm',
+					choices: [
+						{ id: 1, label: 'Arm' },
+						{ id: 0, label: 'Unarm' },
+					],
+					default: true,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					ScreenDestination: { id: parseInt(action.options.destId) },
+					AuxDestination: [],
+					arm: action.options.arm,
+				}
+				this.eventmaster.armUnarmDestination(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Freeze/Unfreeze Destination ***NEW API
+		actions['freeze_dest'] = {
+			name: 'Freeze/Unfreeze Destination',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Destination',
+					id: 'destId',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+				{
+					type: 'dropdown',
+					label: 'Freeze (true) or Unfreeze (false)',
+					id: 'freeze',
+					choices: this.CHOICES_FREEZE,
+					default: 1,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					type: 1, // 1 type is destination
+					id: parseInt(action.options.destId),
+					screengroup: 0, // 0 for all screengroups
+					mode: parseInt(action.options.freeze), // 1 for freeze, 0 for unfreeze
+				}
+				this.eventmaster.freezeDestSource(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', '(un)freeze response: ' + JSON.stringify(res))
+				})
 			},
 		}
 		return actions
 	}
-	
 }
 
 runEntrypoint(BarcoInstance, [])
