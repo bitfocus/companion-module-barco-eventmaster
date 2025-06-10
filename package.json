@@ -11,7 +11,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"@companion-module/base": "~1.11.0",
-		"barco-eventmaster": "github:willosof/node-barco-eventmaster#v9.0.3",
+		"barco-eventmaster": "github:willosof/node-barco-eventmaster#v9.0.4",
 		"lodash": "^4.17.21",
 		"ping": "^0.4.4"
 	},
