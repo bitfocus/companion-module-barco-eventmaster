@@ -6,9 +6,7 @@
 	"version": "4.0.2",
 	"main": "eventmaster.js",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
-		"postinstall": "patch-package",
-		"companion-module-build": "ZX_SHELL=/bin/bash companion-module-build"
+		"test": "echo \"Error: no test specified\" && exit 1"
 	},
 	"license": "MIT",
 	"dependencies": {
@@ -23,7 +21,8 @@
 	},
 	"devDependencies": {
 		"@companion-module/tools": "^2.3.0",
-		"patch-package": "^8.0.0"
+		"eslint": "^9.28.0",
+		"prettier": "^3.5.3"
 	},
 	"packageManager": "yarn@4.9.2"
 }
