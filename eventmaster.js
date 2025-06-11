@@ -3,7 +3,6 @@ const { InstanceBase, InstanceStatus, Regex, runEntrypoint } = require('@compani
 const ping = require('ping')
 const getPresets = require('./presets')
 const _ = require('lodash')
-const { type } = require('os')
 
 class BarcoInstance extends InstanceBase {
 	constructor(internal) {
