@@ -24,5 +24,6 @@
 	"devDependencies": {
 		"@companion-module/tools": "^2.3.0",
 		"patch-package": "^8.0.0"
-	}
+	},
+	"packageManager": "yarn@4.9.2"
 }
