@@ -96,10 +96,47 @@ class BarcoInstance extends InstanceBase {
 		}
 	}
 
+	// initEventmasterListener() {
+		
+	// 	// Start server to receive notifications
+	// 	this.eventmaster.startNotificationServer(3004, (notification) => {
+	// 		if(notification.result.method === 'notification' && notification.result.notificationType === 'ScreenDestChanged') {
+	// 			const update = JSON.stringify(notification.result.change.update)
+	// 			// this.log('info', `Screen Destination Changed: ${update}`)
+	// 		}
+	// 	})
+		
+	// 	this.eventmaster.listContent({id: 1 }, (err, res) => {
+	// 		if (err) {
+	// 			this.log('error', 'EventMaster Error: ' + err)
+	// 		} else {
+	// 			this.log('info', `Screen Destination Changed result: ${JSON.stringify(res)}`)
+	// 		}
+	// 	})
+
+	// 	// Subscribe to notifications
+	// 	this.eventmaster.unsubscribe("172.16.25.235", 3004, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
+	// 		if (err) {
+	// 			console.error('Subscribe error:', err)
+	// 		} else {
+	// 			console.log('Subscribed:', result)
+	// 		}
+	// 	})
+	// 	// Subscribe to notifications
+	// 	this.eventmaster.subscribe("172.16.25.235", 3004, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
+	// 		if (err) {
+	// 			console.error('Subscribe error:', err)
+	// 		} else {
+	// 			console.log('Subscribed:', result)
+	// 		}
+	// 	})
+	// }
+
 	initEventmaster() {
 		console.log('Connecting to EventMaster at', this.config.host)
 		this.eventmaster = new EventMaster(this.config.host)
 		console.log('EventMaster instance created:', this.eventmaster)
+		// this.initEventmasterListener()
 		this.updateStatus(InstanceStatus.Ok)
 		this.getFrameSettings()
 		this.getAllDataFromEventmaster().then(() => {
@@ -545,7 +582,7 @@ class BarcoInstance extends InstanceBase {
 			],
 			callback: (action) => {
 				const params = {
-					type: 0, // 1 type is source
+					type: 0, // 0 type is source
 					id: parseInt(action.options.frzSource),
 					Screengroup: 0, // 0 for all screengroups
 					mode: parseInt(action.options.frzType), // 1 for freeze, 0 for unfreeze
@@ -1078,7 +1115,7 @@ class BarcoInstance extends InstanceBase {
 			],
 			callback: (action) => {
 				const params = {
-					type: 1, // 1 type is destination
+					type: 2, // 2 type is destination
 					id: parseInt(action.options.destId),
 					screengroup: 0, // 0 for all screengroups
 					mode: parseInt(action.options.freeze), // 1 for freeze, 0 for unfreeze
