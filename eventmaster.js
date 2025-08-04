@@ -623,6 +623,76 @@ class BarcoInstance extends InstanceBase {
 			},
 		}
 
+		// Change AUX Content (Enhanced)
+		actions['change_aux_content'] = {
+			name: 'Change AUX Content',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'AUX Destination',
+					id: 'auxDestination',
+					choices: CHOICES_AUXDESTINATIONS,
+				},
+				{
+					type: 'textinput',
+					label: 'Name (Optional)',
+					id: 'auxName',
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Preview Source',
+					id: 'pvwSource',
+					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Program Source',
+					id: 'pgmSource',
+					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Test Pattern',
+					id: 'testPattern',
+					choices: [{ id: '', label: 'No Test Pattern' }, ...this.CHOICES_TESTPATTERN],
+					default: '',
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.auxDestination),
+				}
+
+				// Add optional name if provided
+				if (action.options.auxName && action.options.auxName.trim() !== '') {
+					params.Name = action.options.auxName.trim()
+				}
+
+				// Add preview source if selected
+				if (action.options.pvwSource && action.options.pvwSource !== '') {
+					params.PvwLastSrcIndex = parseInt(action.options.pvwSource)
+				}
+
+				// Add program source if selected
+				if (action.options.pgmSource && action.options.pgmSource !== '') {
+					params.PgmLastSrcIndex = parseInt(action.options.pgmSource)
+				}
+
+				// Add test pattern if selected
+				if (action.options.testPattern && action.options.testPattern !== '') {
+					params.TestPattern = parseInt(action.options.testPattern)
+				}
+
+				this.eventmaster.changeAuxContent(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'changeAuxContent response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
 		// Set testpattern for screen destinations  ***TESTED
 		actions['testpattern_on_SCREEN'] = {
 			name: 'Set testpattern for screen destinations',
@@ -648,6 +718,215 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster.changeContent(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'changeContentTestPattern response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Change Screen Content (Enhanced)
+		actions['change_screen_content'] = {
+			name: 'Change Screen Content',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen Destination',
+					id: 'screenDestination',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+				{
+					type: 'dropdown',
+					label: 'Test Pattern',
+					id: 'testPattern',
+					choices: [{ id: '', label: 'No Test Pattern' }, ...this.CHOICES_TESTPATTERN],
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Program Background Source',
+					id: 'pgmBgSource',
+					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Preview Background Source',
+					id: 'pvwBgSource',
+					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					default: '',
+				},
+				{
+					type: 'checkbox',
+					label: 'Show Program Background Matte',
+					id: 'pgmBgMatte',
+					default: false,
+				},
+				{
+					type: 'checkbox',
+					label: 'Show Preview Background Matte',
+					id: 'pvwBgMatte',
+					default: false,
+				},
+				{
+					type: 'number',
+					label: 'Layer ID (Optional)',
+					id: 'layerId',
+					default: '',
+					min: 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Layer Source',
+					id: 'layerSource',
+					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					default: '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Layer Mode',
+					id: 'layerMode',
+					choices: [
+						{ id: '', label: 'No Change' },
+						{ id: 'preview', label: 'Preview Only' },
+						{ id: 'program', label: 'Program Only' },
+						{ id: 'both', label: 'Both Preview & Program' },
+					],
+					default: '',
+				},
+				{
+					type: 'number',
+					label: 'Window H Position',
+					id: 'winHPos',
+					default: '',
+					min: 0,
+				},
+				{
+					type: 'number',
+					label: 'Window V Position',
+					id: 'winVPos',
+					default: '',
+					min: 0,
+				},
+				{
+					type: 'number',
+					label: 'Window H Size',
+					id: 'winHSize',
+					default: '',
+					min: 1,
+				},
+				{
+					type: 'number',
+					label: 'Window V Size',
+					id: 'winVSize',
+					default: '',
+					min: 1,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.screenDestination),
+				}
+
+				// Add test pattern if selected
+				if (action.options.testPattern && action.options.testPattern !== '') {
+					params.TestPattern = parseInt(action.options.testPattern)
+				}
+
+				// Build background layers if sources are specified
+				const bgLayers = []
+				let hasBgChanges = false
+
+				// Program background (id: 0)
+				if (action.options.pgmBgSource && action.options.pgmBgSource !== '') {
+					bgLayers.push({
+						id: 0,
+						LastBGSourceIndex: parseInt(action.options.pgmBgSource),
+						BGShowMatte: action.options.pgmBgMatte ? 1 : 0,
+						BGColor: [{ id: 0, Red: 0, Green: 0, Blue: 0 }],
+					})
+					hasBgChanges = true
+				}
+
+				// Preview background (id: 1)
+				if (action.options.pvwBgSource && action.options.pvwBgSource !== '') {
+					bgLayers.push({
+						id: 1,
+						LastBGSourceIndex: parseInt(action.options.pvwBgSource),
+						BGShowMatte: action.options.pvwBgMatte ? 1 : 0,
+						BGColor: [{ id: 0, Red: 0, Green: 0, Blue: 0 }],
+					})
+					hasBgChanges = true
+				}
+
+				if (hasBgChanges) {
+					params.BGLyr = bgLayers
+				}
+
+				// Build layer configuration if layer settings are specified
+				if (
+					action.options.layerId !== '' &&
+					(action.options.layerSource !== '' || action.options.layerMode !== '' || 
+					 action.options.winHPos !== '' || action.options.winVPos !== '' ||
+					 action.options.winHSize !== '' || action.options.winVSize !== '')
+				) {
+					const layer = {
+						id: parseInt(action.options.layerId) || 0,
+					}
+
+					// Set layer source
+					if (action.options.layerSource && action.options.layerSource !== '') {
+						layer.LastSrcIdx = parseInt(action.options.layerSource)
+					}
+
+					// Set layer mode
+					if (action.options.layerMode && action.options.layerMode !== '') {
+						switch (action.options.layerMode) {
+							case 'preview':
+								layer.PvwMode = 1
+								layer.PgmMode = 0
+								break
+							case 'program':
+								layer.PvwMode = 0
+								layer.PgmMode = 1
+								break
+							case 'both':
+								layer.PvwMode = 1
+								layer.PgmMode = 1
+								break
+						}
+					}
+
+					// Set window properties if any are specified
+					if (
+						action.options.winHPos !== '' || action.options.winVPos !== '' ||
+						action.options.winHSize !== '' || action.options.winVSize !== ''
+					) {
+						layer.Window = {
+							HPos: action.options.winHPos !== '' ? parseInt(action.options.winHPos) : 0,
+							VPos: action.options.winVPos !== '' ? parseInt(action.options.winVPos) : 0,
+							HSize: action.options.winHSize !== '' ? parseInt(action.options.winHSize) : 1920,
+							VSize: action.options.winVSize !== '' ? parseInt(action.options.winVSize) : 1080,
+						}
+						// Default source size
+						layer.Source = {
+							HPos: 0,
+							VPos: 0,
+							HSize: 1920,
+							VSize: 1080,
+						}
+						// Default mask (no cropping)
+						layer.Mask = {
+							Left: 0,
+							Right: 0,
+							Top: 0,
+							Bottom: 0,
+						}
+					}
+
+					params.Layers = [layer]
+				}
+
+				this.eventmaster.changeContent(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'changeContent response: ' + JSON.stringify(res))
 				})
 			},
 		}
