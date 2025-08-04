@@ -10,3 +10,4 @@
 # EXCEPT these
 !.yarn/releases/
 !.yarn/plugins/
+.DS_Store

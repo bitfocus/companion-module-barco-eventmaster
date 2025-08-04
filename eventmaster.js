@@ -1126,6 +1126,151 @@ class BarcoInstance extends InstanceBase {
 				})
 			},
 		}
+
+		// List Source Main Backup
+		actions['list_source_main_backup'] = {
+			name: 'List Source Main Backup',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Input Type',
+					id: 'inputType',
+					choices: [
+						{ id: -1, label: 'All (Inputs + Background)' },
+						{ id: 0, label: 'Inputs Only' },
+						{ id: 1, label: 'Background Only' },
+					],
+					default: -1,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					inputType: parseInt(action.options.inputType),
+				}
+				this.eventmaster.listSourceMainBackup(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'listSourceMainBackup response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Activate Source Main Backup
+		actions['activate_source_main_backup'] = {
+			name: 'Activate Source Main Backup',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Input/Background Source',
+					id: 'inputId',
+					choices: CHOICES_SOURCES,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 1 Source Type',
+					id: 'backup1SrcType',
+					choices: [
+						{ id: 0, label: 'Input' },
+						{ id: 1, label: 'Still' },
+					],
+					default: 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 1 Source',
+					id: 'backup1SourceId',
+					choices: CHOICES_SOURCES,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 2 Source Type',
+					id: 'backup2SrcType',
+					choices: [
+						{ id: 0, label: 'Input' },
+						{ id: 1, label: 'Still' },
+					],
+					default: 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 2 Source',
+					id: 'backup2SourceId',
+					choices: CHOICES_SOURCES,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 3 Source Type',
+					id: 'backup3SrcType',
+					choices: [
+						{ id: 0, label: 'Input' },
+						{ id: 1, label: 'Still' },
+					],
+					default: 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup 3 Source',
+					id: 'backup3SourceId',
+					choices: CHOICES_SOURCES,
+				},
+				{
+					type: 'dropdown',
+					label: 'Backup State',
+					id: 'backupState',
+					choices: [
+						{ id: -1, label: 'Primary (Default)' },
+						{ id: 1, label: 'Backup 1' },
+						{ id: 2, label: 'Backup 2' },
+						{ id: 3, label: 'Backup 3' },
+					],
+					default: -1,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					inputId: parseInt(action.options.inputId),
+					Backup1: {
+						SrcType: parseInt(action.options.backup1SrcType),
+						SourceId: parseInt(action.options.backup1SourceId),
+					},
+					Backup2: {
+						SrcType: parseInt(action.options.backup2SrcType),
+						SourceId: parseInt(action.options.backup2SourceId),
+					},
+					Backup3: {
+						SrcType: parseInt(action.options.backup3SrcType),
+						SourceId: parseInt(action.options.backup3SourceId),
+					},
+					BackUpState: parseInt(action.options.backupState),
+				}
+				this.eventmaster.activateSourceMainBackup(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'activateSourceMainBackup response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Reset Source Main Backup
+		actions['reset_source_main_backup'] = {
+			name: 'Reset Source Main Backup',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'sourceId',
+					choices: CHOICES_SOURCES,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					id: parseInt(action.options.sourceId),
+				}
+				this.eventmaster.resetSourceMainBackup(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'resetSourceMainBackup response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
 		return actions
 	}
 }
