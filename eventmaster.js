@@ -334,10 +334,10 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				this.eventmasterData.ScreenDestinations = this.convertArrayToObject(res.response.ScreenDestination)
-				this.eventmasterData.AuxDestinations = this.convertArrayToObject(res.response.AuxDestination)
-				this.eventmasterData.SuperDestinations = this.convertArrayToObject(res.response.SuperDestination)
-				this.eventmasterData.SuperAuxDestinations = this.convertArrayToObject(res.response.SuperAux)
+				this.eventmasterData.ScreenDestinations = this.convertArrayToObject(res.response.ScreenDestination, 'Name')
+				this.eventmasterData.AuxDestinations = this.convertArrayToObject(res.response.AuxDestination, 'Name')
+				this.eventmasterData.SuperDestinations = this.convertArrayToObject(res.response.SuperDestination, 'Name')
+				this.eventmasterData.SuperAuxDestinations = this.convertArrayToObject(res.response.SuperAux, 'Name')
 			} catch (err) {
 				this.log('error', 'EventMaster Destinations Error: ' + err)
 			}
@@ -390,14 +390,18 @@ class BarcoInstance extends InstanceBase {
 			label: key.Name,
 			id: key.id,
 		}))
-		const CHOICES_SCREENDESTINATIONS = Object.values(this.eventmasterData.ScreenDestinations).map((dest) => ({
-			label: dest.Name,
-			id: dest.id,
-		}))
-		const CHOICES_AUXDESTINATIONS = Object.values(this.eventmasterData.AuxDestinations).map((dest) => ({
-			label: dest.Name,
-			id: dest.id,
-		}))
+		const CHOICES_SCREENDESTINATIONS = Object.values(this.eventmasterData.ScreenDestinations)
+			.sort((a, b) => a.id - b.id)  // Sort by ID to ensure consistent ordering
+			.map((dest) => ({
+				label: dest.Name,
+				id: dest.id,
+			}))
+		const CHOICES_AUXDESTINATIONS = Object.values(this.eventmasterData.AuxDestinations)
+			.sort((a, b) => a.id - b.id)  // Sort by ID to ensure consistent ordering
+			.map((dest) => ({
+				label: dest.Name,
+				id: dest.id,
+			}))
 		// const CHOICES_SUPERDESTINATIONS = Object.values(this.eventmasterData.SuperDestinations).map((dest) => ({
 		// 	label: dest.Name,
 		// 	id: dest.id,
@@ -1358,15 +1362,16 @@ class BarcoInstance extends InstanceBase {
 						{ id: 1, label: 'Arm' },
 						{ id: 0, label: 'Unarm' },
 					],
-					default: true,
+					default: 1,
 				},
 			],
 			callback: (action) => {
 				const params = {
-					ScreenDestination: { id: parseInt(action.options.destId) },
+					ScreenDestination: [{ id: parseInt(action.options.destId) }],
 					AuxDestination: [],
-					arm: action.options.arm,
+					arm: parseInt(action.options.arm),
 				}
+				console.log('Arm/Unarm Destination with params:', JSON.stringify(params))
 				this.eventmaster.armUnarmDestination(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
