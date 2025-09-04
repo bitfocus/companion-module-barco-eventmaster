@@ -168,7 +168,7 @@ class BarcoInstance extends InstanceBase {
 				}
 				
 				if (frameData) {
-					// Extract the data from the correct structure
+					// Extract the basic frame data
 					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
 					const version = frameData.Version || 'Unknown'
 					const osVersion = frameData.OSVersion || 'Unknown'
@@ -177,13 +177,80 @@ class BarcoInstance extends InstanceBase {
 					this.eventmasterData.version = version
 					this.eventmasterData.OSVersion = osVersion
 					
-					this.setVariableValues({
+					// Start with basic variables
+					const variableValues = {
 						frame_IP: frameIP,
 						frame_version: version,
 						frame_OSVersion: osVersion,
-					})
+					}
+					
+					// Build dynamic variable definitions including card slots
+					const variableDefinitions = [
+						{ variableId: 'frame_IP', name: 'Frame IP Address' },
+						{ variableId: 'frame_version', name: 'Frame Version' },
+						{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
+						{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
+						{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
+					]
+					
+					// Process card slots if they exist
+					if (frameData.Slot && Array.isArray(frameData.Slot)) {
+						frameData.Slot.forEach((slot, index) => {
+							if (slot.Card) {
+								const slotNum = index + 1
+								const card = slot.Card
+								
+								// Add variable definition for this card (single combined variable)
+								variableDefinitions.push(
+									{ variableId: `card${slotNum}_info`, name: `Card ${slotNum} Information` }
+								)
+								
+								// Build health status
+								let healthStatus = 'OK'
+								if (card.OverTemp === 1 && card.FanWarn === 1) {
+									healthStatus = 'Over Temp + Fan Warning'
+								} else if (card.OverTemp === 1) {
+									healthStatus = 'Over Temperature'
+								} else if (card.FanWarn === 1) {
+									healthStatus = 'Fan Warning'
+								}
+								
+								// Combine all card info into a single string
+								const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
+								variableValues[`card${slotNum}_info`] = cardInfo
+							}
+						})
+					}
+					
+					// Add SysCard (motherboard) information if available
+					if (frameData.SysCard) {
+						variableDefinitions.push(
+							{ variableId: 'syscard_info', name: 'System Card Information' }
+						)
+						
+						let sysHealthStatus = 'OK'
+						if (frameData.SysCard.OverTemp === 1 && frameData.SysCard.FanWarn === 1) {
+							sysHealthStatus = 'Over Temp + Fan Warning'
+						} else if (frameData.SysCard.OverTemp === 1) {
+							sysHealthStatus = 'Over Temperature'
+						} else if (frameData.SysCard.FanWarn === 1) {
+							sysHealthStatus = 'Fan Warning'
+						}
+						
+						const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
+						variableValues.syscard_info = sysCardInfo
+					}
+					
+					// Update variable definitions dynamically
+					this.setVariableDefinitions(variableDefinitions)
+					
+					// Set all variable values
+					this.setVariableValues(variableValues)
 					
 					this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
+					if (frameData.Slot) {
+						this.log('debug', `Found ${frameData.Slot.length} card slots`)
+					}
 				} else {
 					this.log('warning', 'Frame settings data structure not recognized')
 				}
@@ -1306,11 +1373,53 @@ class BarcoInstance extends InstanceBase {
 							this.eventmasterData.version = version
 							this.eventmasterData.OSVersion = osVersion
 							
-							this.setVariableValues({
+							// Start with basic variables
+							const variableValues = {
 								frame_IP: frameIP,
 								frame_version: version,
 								frame_OSVersion: osVersion,
-							})
+							}
+							
+							// Process card slots if they exist
+							if (frameData.Slot && Array.isArray(frameData.Slot)) {
+								frameData.Slot.forEach((slot, index) => {
+									if (slot.Card) {
+										const slotNum = index + 1
+										const card = slot.Card
+										
+										// Build health status
+										let healthStatus = 'OK'
+										if (card.OverTemp === 1 && card.FanWarn === 1) {
+											healthStatus = 'Over Temp + Fan Warning'
+										} else if (card.OverTemp === 1) {
+											healthStatus = 'Over Temperature'
+										} else if (card.FanWarn === 1) {
+											healthStatus = 'Fan Warning'
+										}
+										
+										// Combine all card info into a single string
+										const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
+										variableValues[`card${slotNum}_info`] = cardInfo
+									}
+								})
+							}
+							
+							// Add SysCard information if available
+							if (frameData.SysCard) {
+								let sysHealthStatus = 'OK'
+								if (frameData.SysCard.OverTemp === 1 && frameData.SysCard.FanWarn === 1) {
+									sysHealthStatus = 'Over Temp + Fan Warning'
+								} else if (frameData.SysCard.OverTemp === 1) {
+									sysHealthStatus = 'Over Temperature'
+								} else if (frameData.SysCard.FanWarn === 1) {
+									sysHealthStatus = 'Fan Warning'
+								}
+								
+								const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
+								variableValues.syscard_info = sysCardInfo
+							}
+							
+							this.setVariableValues(variableValues)
 							
 							this.log('debug', `Frame Settings Action: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
 						}
