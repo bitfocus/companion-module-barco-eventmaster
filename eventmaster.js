@@ -480,11 +480,12 @@ class BarcoInstance extends InstanceBase {
 	getActions() {
 		const actions = {}
 
-		const CHOICES_PRESETS = Object.values(this.eventmasterData.presets).map((preset) => ({
-			label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
-			id: preset.id,
-			sort: preset.presetSno || preset.id,
-		}))
+		const CHOICES_PRESETS = Object.values(this.eventmasterData.presets)
+			.sort((a, b) => (a.presetSno || a.id) - (b.presetSno || b.id))  // Sort by presetSno (GUI order)
+			.map((preset) => ({
+				label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
+				id: preset.id,
+			}))
 		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => ({
 			label: source.Name,
 			id: source.id,
