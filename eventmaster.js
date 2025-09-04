@@ -138,7 +138,6 @@ class BarcoInstance extends InstanceBase {
 		console.log('EventMaster instance created:', this.eventmaster)
 		// this.initEventmasterListener()
 		this.updateStatus(InstanceStatus.Ok)
-		this.getFrameSettings()
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
 			this.setPresetDefinitions(getPresets(this.eventmasterData))
@@ -148,20 +147,56 @@ class BarcoInstance extends InstanceBase {
 		if (this.retry_interval) clearInterval(this.retry_interval)
 	}
 
-	getFrameSettings() {
-		this.eventmaster.getFrameSettings({}, (err, res) => {
-			if (err) this.log('error', 'EventMaster Error: ' + err)
-			else {
-				this.eventmasterData.frameIP = res.response.System.FrameCollection.Frame[0].Enet.IP
-				this.eventmasterData.version = res.response.System.FrameCollection.Frame[0].Version
-				this.eventmasterData.OSVersion = res.response.System.FrameCollection.Frame[0].OSVersion
+	async getFrameSettings() {
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.getFrameSettings({}, (err, result) => {
+						if (err) reject(err)
+						else resolve(result)
+					})
+				})
+				
+				// Log the response structure to understand the format
+				console.log('Frame Settings Response:', JSON.stringify(res, null, 2))
+				
+				// Parse the correct structure based on the actual response
+				let frameData = null
+				if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
+					// Frame is a single object, not an array
+					frameData = res.response.System.FrameCollection.Frame
+				}
+				
+				if (frameData) {
+					// Extract the data from the correct structure
+					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
+					const version = frameData.Version || 'Unknown'
+					const osVersion = frameData.OSVersion || 'Unknown'
+					
+					this.eventmasterData.frameIP = frameIP
+					this.eventmasterData.version = version
+					this.eventmasterData.OSVersion = osVersion
+					
+					this.setVariableValues({
+						frame_IP: frameIP,
+						frame_version: version,
+						frame_OSVersion: osVersion,
+					})
+					
+					this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
+				} else {
+					this.log('warning', 'Frame settings data structure not recognized')
+				}
+			} catch (err) {
+				this.log('error', 'EventMaster Frame Settings Error: ' + err)
+				// Set fallback values
 				this.setVariableValues({
-					frame_IP: this.eventmasterData.frameIP,
-					frame_version: this.eventmasterData.version,
-					frame_OSVersion: this.eventmasterData.OSVersion,
+					frame_IP: this.config.host || 'Unknown',
+					frame_version: 'Error fetching',
+					frame_OSVersion: 'Error fetching',
 				})
 			}
-		})
+		}
 	}
 	// Polling function to keep data updated
 	eventmasterPoller() {
@@ -345,20 +380,28 @@ class BarcoInstance extends InstanceBase {
 	}
 
 	async getPowerStatusFromEventmaster() {
-		this.eventmaster.powerStatus((err, res) => {
-			if (err) this.log('error', 'EventMaster Error: ' + err)
-			else {
+		if (this.eventmaster) {
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.powerStatus((err, result) => {
+						if (err) reject(err)
+						else resolve(result)
+					})
+				})
 				const key = Object.keys(res.response)[0]
 				this.setVariableValues({
 					power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
 					power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
 				})
+			} catch (err) {
+				this.log('error', 'EventMaster Power Status Error: ' + err)
 			}
-		})
+		}
 	}
 
 	async getAllDataFromEventmaster() {
 		console.log('Fetching all data from EventMaster...')
+		await this.getFrameSettings()
 		await this.getPresetsFromEventmaster()
 		await this.getSourcesFromEventmaster()
 		await this.getCuesFromEventmaster()
@@ -1245,16 +1288,32 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster.getFrameSettings({}, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else {
-						// this.log('debug', 'listMvrPreset response: ' + JSON.stringify(res))
-						// const key = Object.keys(res.response.System.FrameCollection)[0]
-						this.eventmasterData.frameIP = res.response.System.FrameCollection.Frame[0].Enet.IP
-						this.eventmasterData.version = res.response.System.FrameCollection.Frame[0].Version
-						this.eventmasterData.OSVersion = res.response.System.FrameCollection.Frame[0].OSVersion
-						this.setVariableValues({
-							frame_IP: this.eventmasterData.frameIP,
-							frame_version: this.eventmasterData.version,
-							frame_OSVersion: this.eventmasterData.OSVersion,
-						})
+						console.log('Frame Settings Action Response:', JSON.stringify(res, null, 2))
+						
+						// Parse the correct structure
+						let frameData = null
+						if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
+							// Frame is a single object, not an array
+							frameData = res.response.System.FrameCollection.Frame
+						}
+						
+						if (frameData) {
+							const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
+							const version = frameData.Version || 'Unknown'
+							const osVersion = frameData.OSVersion || 'Unknown'
+							
+							this.eventmasterData.frameIP = frameIP
+							this.eventmasterData.version = version
+							this.eventmasterData.OSVersion = osVersion
+							
+							this.setVariableValues({
+								frame_IP: frameIP,
+								frame_version: version,
+								frame_OSVersion: osVersion,
+							})
+							
+							this.log('debug', `Frame Settings Action: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
+						}
 					}
 				})
 			},
