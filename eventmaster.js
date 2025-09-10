@@ -21,6 +21,9 @@ class BarcoInstance extends InstanceBase {
 			ScreenDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
 			SuperDestinations: { 0: { id: 0, Name: 'no destinations loaded yet' } },
 		}
+		// Track dynamic variables
+		this.detectedCardSlots = []
+		this.frameVariableDefinitions = []
 		this.CHOICES_FREEZE = [
 			{ label: 'Freeze', id: 1 },
 			{ label: 'Unfreeze', id: 0 },
@@ -140,6 +143,7 @@ class BarcoInstance extends InstanceBase {
 		this.updateStatus(InstanceStatus.Ok)
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
+			this.setFeedbackDefinitions(this.getFeedbacks())
 			this.setPresetDefinitions(getPresets(this.eventmasterData))
 
 			this.eventmasterPoller()
@@ -158,7 +162,7 @@ class BarcoInstance extends InstanceBase {
 				})
 				
 				// Log the response structure to understand the format
-				console.log('Frame Settings Response:', JSON.stringify(res, null, 2))
+				// console.log('Frame Settings Response:', JSON.stringify(res, null, 2))
 				
 				// Parse the correct structure based on the actual response
 				let frameData = null
@@ -195,10 +199,14 @@ class BarcoInstance extends InstanceBase {
 					
 					// Process card slots if they exist
 					if (frameData.Slot && Array.isArray(frameData.Slot)) {
+						this.detectedCardSlots = [] // Reset detected cards
 						frameData.Slot.forEach((slot, index) => {
 							if (slot.Card) {
 								const slotNum = index + 1
 								const card = slot.Card
+								
+								// Store detected card info
+								this.detectedCardSlots.push(slotNum)
 								
 								// Add variable definition for this card (single combined variable)
 								variableDefinitions.push(
@@ -241,6 +249,9 @@ class BarcoInstance extends InstanceBase {
 						variableValues.syscard_info = sysCardInfo
 					}
 					
+					// Store frame variable definitions for use by updateDestinationVariables
+					this.frameVariableDefinitions = variableDefinitions
+					
 					// Update variable definitions dynamically
 					this.setVariableDefinitions(variableDefinitions)
 					
@@ -275,6 +286,7 @@ class BarcoInstance extends InstanceBase {
 					() => {
 						this.getAllDataFromEventmaster().then(() => {
 							this.setActionDefinitions(this.getActions())
+							this.setFeedbackDefinitions(this.getFeedbacks())
 							this.setPresetDefinitions(getPresets(this.eventmasterData))
 						})
 					},
@@ -475,6 +487,255 @@ class BarcoInstance extends InstanceBase {
 		await this.getDestinationsFromEventmaster()
 		await this.getUserKeysFromEventmaster()
 		await this.getPowerStatusFromEventmaster()
+		
+		// Update variable definitions to include destination content variables
+		this.updateDestinationVariables()
+	}
+
+	/**
+	 * Update variable definitions to include source monitoring variables
+	 */
+	updateDestinationVariables() {
+		// Start with frame variables (if available) or default variables
+		const variables = this.frameVariableDefinitions.length > 0 
+			? [...this.frameVariableDefinitions] 
+			: [
+				{ variableId: 'frame_IP', name: 'Frame IP Address' },
+				{ variableId: 'frame_version', name: 'Frame Version' },
+				{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
+				{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
+				{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
+			]
+
+		// Add source monitoring variables - show which destinations each source is active on
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			Object.values(this.eventmasterData.sources).forEach(source => {
+				variables.push({ 
+					variableId: `source_${source.id + 1}_name`, 
+					name: `Source ${source.id + 1} Name` 
+				})
+				variables.push({ 
+					variableId: `source_${source.id + 1}_pgm_destinations`, 
+					name: `${source.Name} - PGM Destinations` 
+				})
+				variables.push({ 
+					variableId: `source_${source.id + 1}_pvw_destinations`, 
+					name: `${source.Name} - PVW Destinations` 
+				})
+				variables.push({ 
+					variableId: `source_${source.id + 1}_is_active`, 
+					name: `${source.Name} - Is Active (PGM or PVW)` 
+				})
+			})
+		}
+
+		this.setVariableDefinitions(variables)
+		
+		// Auto-populate source monitoring variables
+		this.autoPopulateSourceMonitoring()
+	}
+
+	/**
+	 * Auto-populate source monitoring variables by querying all destinations
+	 * Shows which destinations each source is active on
+	 */
+	async autoPopulateSourceMonitoring() {
+		this.log('debug', 'Starting source monitoring auto-population...')
+		
+		// Check if EventMaster is connected
+		if (!this.eventmaster) {
+			this.log('warning', 'EventMaster not connected, skipping source monitoring')
+			return
+		}
+		
+		// Initialize source tracking objects
+		const sourcePgmDestinations = {}
+		const sourcePvwDestinations = {}
+		
+		// Initialize all sources with empty arrays
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			Object.values(this.eventmasterData.sources).forEach(source => {
+				sourcePgmDestinations[source.id] = []
+				sourcePvwDestinations[source.id] = []
+			})
+			// this.log('debug', `Initialized tracking for ${Object.keys(sourcePgmDestinations).length} sources`)
+		} else {
+			this.log('warning', 'No sources available for monitoring')
+			return
+		}
+
+		// Query all screen destinations to see what sources are active
+		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
+			this.log('debug', `Querying ${Object.keys(this.eventmasterData.ScreenDestinations).length} screen destinations...`)
+			
+			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
+				try {
+					// this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
+					
+					const res = await new Promise((resolve, reject) => {
+						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
+							if (err) reject(err)
+							else resolve(result)
+						})
+					})
+					
+					if (res && res.response) {
+						const content = res.response
+						// Removed excessive debug logging for cleaner output
+						
+						// Check background layers for PGM (id 0 = PGM background)
+						if (content.BGLyr && content.BGLyr.length > 0) {
+							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
+							
+							const pgmBgLayer = content.BGLyr.find(layer => layer.id === 0)
+							if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined && pgmBgLayer.LastBGSourceIndex !== -1) {
+								const sourceId = pgmBgLayer.LastBGSourceIndex
+								if (sourcePgmDestinations[sourceId]) {
+									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
+									// this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId}`)
+								}
+							}
+							
+							// Check for PVW background (id 1 = PVW background)
+							const pvwBgLayer = content.BGLyr.find(layer => layer.id === 1)
+							if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined && pvwBgLayer.LastBGSourceIndex !== -1) {
+								const sourceId = pvwBgLayer.LastBGSourceIndex
+								if (sourcePvwDestinations[sourceId]) {
+									sourcePvwDestinations[sourceId].push(`Screen ${dest.Name}`)
+									// this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId}`)
+								}
+							}
+						}
+						
+						// Check active layers
+						if (content.Layers && content.Layers.length > 0) {
+							// this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
+							
+							content.Layers.forEach(layer => {
+								if (layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1) {
+									const sourceId = layer.LastSrcIdx
+									if (sourcePgmDestinations[sourceId]) {
+										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
+										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: PGM = Source ${sourceId}`)
+									}
+								}
+								// Check for PVW layers (if they have PVW source info)
+								if (layer.PvwSrcIdx !== undefined && layer.PvwSrcIdx !== -1) {
+									const sourceId = layer.PvwSrcIdx
+									if (sourcePvwDestinations[sourceId]) {
+										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
+										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: PVW = Source ${sourceId}`)
+									}
+								}
+							})
+						}
+					} else {
+						this.log('warning', `No response data for screen destination ${dest.id}`)
+					}
+				} catch (err) {
+					this.log('error', `Could not get content for screen destination ${dest.id}: ${err}`)
+				}
+			}
+		}
+
+		// Query all AUX destinations
+		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
+			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.AuxDestinations).length} AUX destinations...`)
+			
+			for (const dest of Object.values(this.eventmasterData.AuxDestinations)) {
+				try {
+					// this.log('debug', `Querying AUX destination ${dest.id} (${dest.Name})...`)
+					
+					const res = await new Promise((resolve, reject) => {
+						this.eventmaster.listAuxContent(parseInt(dest.id), (err, result) => {
+							if (err) reject(err)
+							else resolve(result)
+						})
+					})
+					
+					if (res && res.response) {
+						const auxContent = res.response
+						// this.log('debug', `AUX ${dest.id} content structure: ${JSON.stringify(Object.keys(auxContent))}`)
+						
+						// Check PGM source
+						if (auxContent.PgmLastSrcIndex !== undefined) {
+							const sourceId = auxContent.PgmLastSrcIndex
+							if (sourcePgmDestinations[sourceId]) {
+								sourcePgmDestinations[sourceId].push(`AUX ${dest.Name}`)
+								// this.log('debug', `AUX ${dest.Name}: PGM = Source ${sourceId}`)
+							}
+						}
+						
+						// Check PVW source
+						if (auxContent.PvwLastSrcIndex !== undefined) {
+							const sourceId = auxContent.PvwLastSrcIndex
+							if (sourcePvwDestinations[sourceId]) {
+								sourcePvwDestinations[sourceId].push(`AUX ${dest.Name}`)
+								// this.log('debug', `AUX ${dest.Name}: PVW = Source ${sourceId}`)
+							}
+						}
+					} else {
+						this.log('warning', `No response data for AUX destination ${dest.id}`)
+					}
+				} catch (err) {
+					this.log('error', `Could not get content for AUX destination ${dest.id}: ${err}`)
+				}
+			}
+		}
+
+		// Set variable values for all sources
+		const variableValues = {}
+		let activeSources = 0
+		
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			Object.values(this.eventmasterData.sources).forEach(source => {
+				const pgmDests = sourcePgmDestinations[source.id]
+				const pvwDests = sourcePvwDestinations[source.id]
+				const isActive = pgmDests.length > 0 || pvwDests.length > 0
+				
+				// Set source name
+				variableValues[`source_${source.id + 1}_name`] = source.Name || `Source ${source.id + 1}`
+				
+				// Set destination lists
+				variableValues[`source_${source.id + 1}_pgm_destinations`] = pgmDests.length > 0 
+					? pgmDests.join(', ') 
+					: 'Not active on PGM'
+					
+				variableValues[`source_${source.id + 1}_pvw_destinations`] = pvwDests.length > 0 
+					? pvwDests.join(', ') 
+					: 'Not active on PVW'
+					
+				// Set active status (true/false or Yes/No for better readability)
+				variableValues[`source_${source.id + 1}_is_active`] = isActive ? 'Yes' : 'No'
+				
+				if (pgmDests.length > 0 || pvwDests.length > 0) {
+					activeSources++
+					// this.log('debug', `Source ${source.id} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}]`)
+				}
+			})
+		}
+		
+		this.setVariableValues(variableValues)
+		
+		// Update feedbacks to reflect current source activity
+		this.checkFeedbacks()
+		
+		this.log('info', `Source monitoring updated: ${activeSources} sources have active destinations`)
+	}
+
+	/**
+	 * Helper method to find source name by ID
+	 * @param {number} sourceId - The source ID to look up
+	 * @returns {string} - The source name or "Unknown Source (ID)"
+	 */
+	findSourceNameById(sourceId) {
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			const source = Object.values(this.eventmasterData.sources).find(src => src.id === sourceId)
+			if (source) {
+				return source.Name
+			}
+		}
+		return `Unknown Source (${sourceId})`
 	}
 
 	getActions() {
@@ -488,7 +749,8 @@ class BarcoInstance extends InstanceBase {
 			}))
 		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => ({
 			label: source.Name,
-			id: source.id,
+			id: source.id + 1000, // Offset to avoid conflict with 0, -1, and empty string
+			actualSourceId: source.id, // Keep the real source ID for later use
 			InputCfgIndex: source.InputCfgIndex,
 			SrcType: source.SrcType,
 			StillIndex: source.StillIndex,
@@ -758,14 +1020,22 @@ class BarcoInstance extends InstanceBase {
 					type: 'dropdown',
 					label: 'Preview Source',
 					id: 'pvwSource',
-					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					choices: [
+						{ id: '', label: 'No Change' }, 
+						{ id: -1, label: 'Clear Source' },
+						...CHOICES_SOURCES
+					],
 					default: '',
 				},
 				{
 					type: 'dropdown',
 					label: 'Program Source',
 					id: 'pgmSource',
-					choices: [{ id: '', label: 'No Change' }, ...CHOICES_SOURCES],
+					choices: [
+						{ id: '', label: 'No Change' }, 
+						{ id: -1, label: 'Clear Source' },
+						...CHOICES_SOURCES
+					],
 					default: '',
 				},
 				{
@@ -787,13 +1057,25 @@ class BarcoInstance extends InstanceBase {
 				}
 
 				// Add preview source if selected
-				if (action.options.pvwSource && action.options.pvwSource !== '') {
-					params.PvwLastSrcIndex = parseInt(action.options.pvwSource)
+				if (action.options.pvwSource !== undefined && action.options.pvwSource !== '') {
+					let pvwSourceIndex = parseInt(action.options.pvwSource)
+					// Handle offset source IDs (convert back to real source ID)
+					if (pvwSourceIndex >= 1000) {
+						pvwSourceIndex = pvwSourceIndex - 1000
+					}
+					this.log('debug', `Setting PVW source to index: ${pvwSourceIndex}`)
+					params.PvwLastSrcIndex = pvwSourceIndex
 				}
 
 				// Add program source if selected
-				if (action.options.pgmSource && action.options.pgmSource !== '') {
-					params.PgmLastSrcIndex = parseInt(action.options.pgmSource)
+				if (action.options.pgmSource !== undefined && action.options.pgmSource !== '') {
+					let pgmSourceIndex = parseInt(action.options.pgmSource)
+					// Handle offset source IDs (convert back to real source ID)
+					if (pgmSourceIndex >= 1000) {
+						pgmSourceIndex = pgmSourceIndex - 1000
+					}
+					this.log('debug', `Setting PGM source to index: ${pgmSourceIndex}`)
+					params.PgmLastSrcIndex = pgmSourceIndex
 				}
 
 				// Add test pattern if selected
@@ -801,9 +1083,21 @@ class BarcoInstance extends InstanceBase {
 					params.TestPattern = parseInt(action.options.testPattern)
 				}
 
+				this.log('debug', `changeAuxContent params: ${JSON.stringify(params)}`)
+				
+				// Debug: log available source indices
+				if (this.eventmasterData && this.eventmasterData.sources) {
+					const sourceIds = Object.values(this.eventmasterData.sources).map(s => s.id)
+					this.log('debug', `Available source indices: ${JSON.stringify(sourceIds)}`)
+				}
+
 				this.eventmaster.changeAuxContent(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'changeAuxContent response: ' + JSON.stringify(res))
+					else {
+						this.log('debug', 'changeAuxContent response: ' + JSON.stringify(res))
+						// Refresh source monitoring after changing AUX content
+						this.autoPopulateSourceMonitoring()
+					}
 				})
 			},
 		}
@@ -1724,7 +2018,262 @@ class BarcoInstance extends InstanceBase {
 			},
 		}
 
+		// Refresh Source Monitoring (Refresh All PGM/PVW Status)
+		actions['refresh_source_monitoring'] = {
+			name: 'Refresh Source Monitoring',
+			options: [],
+			callback: () => {
+				this.autoPopulateSourceMonitoring().then(() => {
+					this.log('info', 'Source monitoring variables refreshed')
+				}).catch(err => {
+					this.log('error', 'Error refreshing source monitoring: ' + err)
+				})
+			},
+		}
+
+		// List Screen Destination Content (Get Active PGM Source)
+		actions['list_screen_content'] = {
+			name: 'List Screen Destination Content',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen Destination',
+					id: 'screenId',
+					choices: CHOICES_SCREENDESTINATIONS,
+				},
+			],
+			callback: (action) => {
+				this.eventmaster.listContent(parseInt(action.options.screenId), (err, res) => {
+					if (err) {
+						this.log('error', 'EventMaster Error: ' + err)
+					} else {
+						this.log('debug', 'listContent response: ' + JSON.stringify(res))
+						
+						// Display information about this destination
+						if (res && res.response) {
+							const content = res.response
+							let pgmInfo = []
+							let pvwInfo = []
+							
+							// Check background layers
+							if (content.BGLayers && content.BGLayers.length > 0) {
+								const pgmBgLayer = content.BGLayers.find(layer => layer.id === 0)
+								if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined) {
+									const sourceName = this.findSourceNameById(pgmBgLayer.LastBGSourceIndex)
+									pgmInfo.push(`Background: ${sourceName}`)
+								}
+								
+								const pvwBgLayer = content.BGLayers.find(layer => layer.id === 1)
+								if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined) {
+									const sourceName = this.findSourceNameById(pvwBgLayer.LastBGSourceIndex)
+									pvwInfo.push(`Background: ${sourceName}`)
+								}
+							}
+							
+							// Check active layers
+							if (content.Layers && content.Layers.length > 0) {
+								content.Layers.forEach(layer => {
+									if (layer.LastSrcIndex !== undefined) {
+										const sourceName = this.findSourceNameById(layer.LastSrcIndex)
+										pgmInfo.push(`Layer ${layer.id}: ${sourceName}`)
+									}
+									if (layer.PvwLastSrcIndex !== undefined) {
+										const sourceName = this.findSourceNameById(layer.PvwLastSrcIndex)
+										pvwInfo.push(`Layer ${layer.id}: ${sourceName}`)
+									}
+								})
+							}
+							
+							const pgmSummary = pgmInfo.length > 0 ? pgmInfo.join(', ') : 'No PGM content'
+							const pvwSummary = pvwInfo.length > 0 ? pvwInfo.join(', ') : 'No PVW content'
+							
+							this.log('info', `Screen ${action.options.screenId} - PGM: ${pgmSummary} | PVW: ${pvwSummary}`)
+						}
+						
+						// Refresh source monitoring after checking this destination
+						this.autoPopulateSourceMonitoring()
+					}
+				})
+			},
+		}
+
+		// List AUX Destination Content (Get Active PGM Source)
+		actions['list_aux_content'] = {
+			name: 'List AUX Destination Content',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'AUX Destination',
+					id: 'auxId',
+					choices: CHOICES_AUXDESTINATIONS,
+				},
+			],
+			callback: (action) => {
+				this.eventmaster.listAuxContent(parseInt(action.options.auxId), (err, res) => {
+					if (err) {
+						this.log('error', 'EventMaster Error: ' + err)
+					} else {
+						this.log('debug', 'listAuxContent response: ' + JSON.stringify(res))
+						
+						// Display information about this AUX destination
+						if (res && res.response) {
+							const auxContent = res.response
+							let pgmSourceInfo = 'No PGM source'
+							let pvwSourceInfo = 'No PVW source'
+							
+							if (auxContent.PgmLastSrcIndex !== undefined) {
+								const sourceName = this.findSourceNameById(auxContent.PgmLastSrcIndex)
+								pgmSourceInfo = `${sourceName} (ID: ${auxContent.PgmLastSrcIndex})`
+							}
+							
+							if (auxContent.PvwLastSrcIndex !== undefined) {
+								const sourceName = this.findSourceNameById(auxContent.PvwLastSrcIndex)
+								pvwSourceInfo = `${sourceName} (ID: ${auxContent.PvwLastSrcIndex})`
+							}
+							
+							this.log('info', `AUX ${action.options.auxId} - PGM: ${pgmSourceInfo} | PVW: ${pvwSourceInfo}`)
+						}
+						
+						// Refresh source monitoring after checking this destination
+						this.autoPopulateSourceMonitoring()
+					}
+				})
+			},
+		}
+
 		return actions
+	}
+
+	getFeedbacks() {
+		const feedbacks = {}
+
+		// Create destination choices for the feedback options
+		const destinationChoices = [
+			{ id: 'anywhere', label: 'Anywhere (Any PGM or PVW)' },
+			{ id: 'anywhere_pgm', label: 'Anywhere PGM' },
+			{ id: 'anywhere_pvw', label: 'Anywhere PVW' },
+		]
+
+		// Add screen destinations
+		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
+			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
+				destinationChoices.push(
+					{ id: `screen_${screen.id}_pgm`, label: `${screen.Name} PGM` },
+					{ id: `screen_${screen.id}_pvw`, label: `${screen.Name} PVW` },
+					{ id: `screen_${screen.id}`, label: `${screen.Name} (PGM or PVW)` }
+				)
+			})
+		}
+
+		// Add AUX destinations
+		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
+			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
+				destinationChoices.push(
+					{ id: `aux_${aux.id}_pgm`, label: `AUX ${aux.Name} PGM` },
+					{ id: `aux_${aux.id}_pvw`, label: `AUX ${aux.Name} PVW` },
+					{ id: `aux_${aux.id}`, label: `AUX ${aux.Name} (PGM or PVW)` }
+				)
+			})
+		}
+
+		// Create source choices for the feedback options
+		const sourceChoices = []
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			Object.values(this.eventmasterData.sources).forEach(source => {
+				sourceChoices.push({
+					id: source.id + 1, // Convert to 1-based for display
+					label: `${source.id + 1}: ${source.Name}`
+				})
+			})
+		}
+
+		// Configurable source active feedback
+		feedbacks['source_active_on_destinations'] = {
+			type: 'boolean',
+			name: 'Source Active on Destinations',
+			description: 'Indicates if the selected source is active on the selected destinations',
+			defaultStyle: {
+				bgcolor: 16711680, // Red background when active (0xFF0000)
+				color: 16777215 // White text (0xFFFFFF)
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'source',
+					choices: sourceChoices,
+					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1
+				},
+				{
+					type: 'multidropdown',
+					label: 'Monitor Destinations',
+					id: 'destinations',
+					choices: destinationChoices,
+					default: ['anywhere']
+				}
+			],
+			callback: (feedback) => {
+				const sourceNumber = parseInt(feedback.options.source)
+				const destinations = feedback.options.destinations || ['anywhere']
+				
+				// Get the source monitoring variables
+				const pgmDestinations = this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || ''
+				const pvwDestinations = this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || ''
+				
+				// Check each selected destination
+				for (const dest of destinations) {
+					if (dest === 'anywhere') {
+						// Check if source is active anywhere
+						const isActive = this.getVariableValue(`source_${sourceNumber}_is_active`)
+						if (isActive === 'Yes') return true
+					} else if (dest === 'anywhere_pgm') {
+						// Check if source is active on any PGM
+						if (pgmDestinations && pgmDestinations !== 'Not active') return true
+					} else if (dest === 'anywhere_pvw') {
+						// Check if source is active on any PVW
+						if (pvwDestinations && pvwDestinations !== 'Not active') return true
+					} else if (dest.startsWith('screen_')) {
+						// Check specific screen destination
+						const parts = dest.split('_')
+						const screenId = parts[1]
+						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						
+						if (mode === 'pgm') {
+							if (pgmDestinations.includes(`Screen `) && pgmDestinations.includes(`${screenId}`)) return true
+						} else if (mode === 'pvw') {
+							if (pvwDestinations.includes(`Screen `) && pvwDestinations.includes(`${screenId}`)) return true
+						} else {
+							// Check both PGM and PVW
+							if ((pgmDestinations.includes(`Screen `) && pgmDestinations.includes(`${screenId}`)) ||
+								(pvwDestinations.includes(`Screen `) && pvwDestinations.includes(`${screenId}`))) return true
+						}
+					} else if (dest.startsWith('aux_')) {
+						// Check specific AUX destination
+						const parts = dest.split('_')
+						const auxId = parts[1]
+						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						
+						// Find the AUX name
+						const aux = this.eventmasterData?.AuxDestinations ? 
+							Object.values(this.eventmasterData.AuxDestinations).find(a => a.id == auxId) : null
+						const auxName = aux ? aux.Name : `AUX ${auxId}`
+						
+						if (mode === 'pgm') {
+							if (pgmDestinations.includes(`AUX ${auxName}`)) return true
+						} else if (mode === 'pvw') {
+							if (pvwDestinations.includes(`AUX ${auxName}`)) return true
+						} else {
+							// Check both PGM and PVW
+							if (pgmDestinations.includes(`AUX ${auxName}`) || pvwDestinations.includes(`AUX ${auxName}`)) return true
+						}
+					}
+				}
+				
+				return false
+			}
+		}
+
+		return feedbacks
 	}
 }
 

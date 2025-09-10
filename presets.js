@@ -1082,5 +1082,169 @@ module.exports = function getPresets(eventmasterData, log) {
 			feedbacks: [],
 		}
 	})
+
+	// Add AUX source presets for each AUX destination
+	if (eventmasterData.AuxDestinations && eventmasterData.sources) {
+		Object.keys(eventmasterData.AuxDestinations).forEach((auxKey) => {
+			const aux = eventmasterData.AuxDestinations[auxKey]
+			const auxId = aux.id
+			const auxName = aux.Name
+
+			// Create source presets for this AUX destination
+			Object.keys(eventmasterData.sources).forEach((sourceKey) => {
+				const source = eventmasterData.sources[sourceKey]
+				const sourceId = source.id
+				const sourceNumber = sourceId + 1 // Convert to 1-based for display
+
+				// Preset for setting this source to AUX PGM
+				presets[`aux_${auxId}_pgm_source_${sourceNumber}`] = {
+					type: 'button',
+					category: `AUX ${auxName} - PGM Sources`,
+					name: `$(eventmaster:source_${sourceNumber}_name)`,
+					style: {
+						text: `$(eventmaster:source_${sourceNumber}_name)`,
+						size: '14',
+						color: combineRgb(255, 255, 255),
+						bgcolor: combineRgb(0, 0, 0),
+					},
+					steps: [
+						{
+							down: [
+								{
+									actionId: 'change_aux_content',
+									options: {
+										auxDestination: auxId,
+										pgmSource: sourceId + 1000, // Use offset ID for dropdown
+										pvwSource: '', // No change to PVW
+										testPattern: '', // No test pattern
+										auxName: '', // Don't change name
+									},
+								},
+							],
+							up: [],
+						},
+					],
+					feedbacks: [
+						{
+							feedbackId: 'source_active_on_destinations',
+							options: {
+								source: sourceNumber,
+								destinations: [`aux_${auxId}_pgm`]
+							},
+							style: {
+								bgcolor: combineRgb(255, 0, 0), // Red when active on this AUX PGM
+								color: combineRgb(255, 255, 255), // White text
+							},
+						},
+					],
+				}
+
+				// Preset for setting this source to AUX PVW
+				presets[`aux_${auxId}_pvw_source_${sourceNumber}`] = {
+					type: 'button',
+					category: `AUX ${auxName} - PVW Sources`,
+					name: `$(eventmaster:source_${sourceNumber}_name)`,
+					style: {
+						text: `$(eventmaster:source_${sourceNumber}_name)`,
+						size: '14',
+						color: combineRgb(255, 255, 255),
+						bgcolor: combineRgb(0, 102, 0), // Dark green for PVW
+					},
+					steps: [
+						{
+							down: [
+								{
+									actionId: 'change_aux_content',
+									options: {
+										auxDestination: auxId,
+										pgmSource: '', // No change to PGM
+										pvwSource: sourceId + 1000, // Use offset ID for dropdown
+										testPattern: '', // No test pattern
+										auxName: '', // Don't change name
+									},
+								},
+							],
+							up: [],
+						},
+					],
+					feedbacks: [
+						{
+							feedbackId: 'source_active_on_destinations',
+							options: {
+								source: sourceNumber,
+								destinations: [`aux_${auxId}_pvw`]
+							},
+							style: {
+								bgcolor: combineRgb(0, 255, 0), // Green when active on this AUX PVW
+								color: combineRgb(0, 0, 0), // Black text for contrast
+							},
+						},
+					],
+				}
+			})
+
+			// Add a "Clear" preset for each AUX destination
+			presets[`aux_${auxId}_clear_pgm`] = {
+				type: 'button',
+				category: `AUX ${auxName} - PGM Sources`,
+				name: 'Clear PGM',
+				style: {
+					text: 'Clear\\nPGM',
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(100, 100, 100), // Dark gray
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'change_aux_content',
+								options: {
+									auxDestination: auxId,
+									pgmSource: -1, // Clear source (set to -1)
+									pvwSource: '', // No change to PVW
+									testPattern: '', // No test pattern
+									auxName: '', // Don't change name
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+
+			presets[`aux_${auxId}_clear_pvw`] = {
+				type: 'button',
+				category: `AUX ${auxName} - PVW Sources`,
+				name: 'Clear PVW',
+				style: {
+					text: 'Clear\\nPVW',
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(100, 100, 100), // Dark gray
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'change_aux_content',
+								options: {
+									auxDestination: auxId,
+									pgmSource: '', // No change to PGM
+									pvwSource: -1, // Clear source (set to -1)
+									testPattern: '', // No test pattern
+									auxName: '', // Don't change name
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+		})
+	}
+
 	return presets
 }
