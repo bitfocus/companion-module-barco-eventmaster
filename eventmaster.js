@@ -607,7 +607,7 @@ class BarcoInstance extends InstanceBase {
 			
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
-					// this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
+					this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
 					
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
@@ -622,14 +622,14 @@ class BarcoInstance extends InstanceBase {
 						
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
-							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
+							this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
 							
 							const pgmBgLayer = content.BGLyr.find(layer => layer.id === 0)
 							if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined && pgmBgLayer.LastBGSourceIndex !== -1) {
 								const sourceId = pgmBgLayer.LastBGSourceIndex
 								if (sourcePgmDestinations[sourceId]) {
 									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
-									// this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId}`)
+									this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId + 1}`)
 								}
 							}
 							
@@ -639,30 +639,43 @@ class BarcoInstance extends InstanceBase {
 								const sourceId = pvwBgLayer.LastBGSourceIndex
 								if (sourcePvwDestinations[sourceId]) {
 									sourcePvwDestinations[sourceId].push(`Screen ${dest.Name}`)
-									// this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId}`)
+									this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId + 1}`)
 								}
 							}
 						}
 						
 						// Check active layers
 						if (content.Layers && content.Layers.length > 0) {
-							// this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
+							this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
 							
 							content.Layers.forEach(layer => {
-								if (layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1) {
-									const sourceId = layer.LastSrcIdx
+								// Check if layer is on PGM
+								if (layer.PgmMode !== undefined && layer.PgmMode > 0 && 
+									layer.SrcIdx !== undefined && layer.SrcIdx !== -1 && 
+									layer.Freeze !== undefined && layer.Freeze === 0) {
+									
+									const sourceId = layer.SrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: PGM = Source ${sourceId}`)
+										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1} (PgmMode: ${layer.PgmMode}, SrcIdx: ${layer.SrcIdx}, Freeze: ${layer.Freeze})`)
 									}
 								}
-								// Check for PVW layers (if they have PVW source info)
-								if (layer.PvwSrcIdx !== undefined && layer.PvwSrcIdx !== -1) {
-									const sourceId = layer.PvwSrcIdx
+								
+								// Check if layer is on PVW
+								if (layer.PvwMode !== undefined && layer.PvwMode > 0 && 
+									layer.SrcIdx !== undefined && layer.SrcIdx !== -1 && 
+									layer.Freeze !== undefined && layer.Freeze === 0) {
+									
+									const sourceId = layer.SrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: PVW = Source ${sourceId}`)
+										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1} (PvwMode: ${layer.PvwMode}, SrcIdx: ${layer.SrcIdx}, Freeze: ${layer.Freeze})`)
 									}
+								}
+								
+								// Debug log for inactive layers
+								if ((layer.PgmMode === 0 && layer.PvwMode === 0) || layer.Freeze > 0) {
+									this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: INACTIVE (PgmMode: ${layer.PgmMode}, PvwMode: ${layer.PvwMode}, Freeze: ${layer.Freeze}) - Source: ${layer.SrcIdx + 1}`)
 								}
 							})
 						}
@@ -747,7 +760,9 @@ class BarcoInstance extends InstanceBase {
 				
 				if (pgmDests.length > 0 || pvwDests.length > 0) {
 					activeSources++
-					// this.log('debug', `Source ${source.id} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}]`)
+					this.log('debug', `Source ${source.id + 1} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}] - Active: ${isActive ? 'Yes' : 'No'}`)
+				} else {
+					this.log('debug', `Source ${source.id + 1} (${source.Name}): Not active anywhere - Active: ${isActive ? 'Yes' : 'No'}`)
 				}
 			})
 		}
@@ -2281,6 +2296,31 @@ class BarcoInstance extends InstanceBase {
 			})
 		}
 
+		// Simple source active feedback for status presets
+		feedbacks['source_active_simple'] = {
+			type: 'boolean',
+			name: 'Source Active (Simple)',
+			description: 'Simple indicator if source is active anywhere',
+			defaultStyle: {
+				bgcolor: 16711680, // Red background when active (0xFF0000)
+				color: 16777215 // White text (0xFFFFFF)
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'source',
+					choices: sourceChoices,
+					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1
+				}
+			],
+			callback: (feedback) => {
+				const sourceNumber = parseInt(feedback.options.source)
+				const isActive = this.getVariableValue(`source_${sourceNumber}_is_active`)
+				return isActive === 'Yes'
+			}
+		}
+
 		// Configurable source active feedback
 		feedbacks['source_active_on_destinations'] = {
 			type: 'boolean',
@@ -2322,10 +2362,10 @@ class BarcoInstance extends InstanceBase {
 						if (isActive === 'Yes') return true
 					} else if (dest === 'anywhere_pgm') {
 						// Check if source is active on any PGM
-						if (pgmDestinations && pgmDestinations !== 'Not active') return true
+						if (pgmDestinations && pgmDestinations !== 'Not active on PGM') return true
 					} else if (dest === 'anywhere_pvw') {
 						// Check if source is active on any PVW
-						if (pvwDestinations && pvwDestinations !== 'Not active') return true
+						if (pvwDestinations && pvwDestinations !== 'Not active on PVW') return true
 					} else if (dest.startsWith('screen_')) {
 						// Check specific screen destination
 						const parts = dest.split('_')

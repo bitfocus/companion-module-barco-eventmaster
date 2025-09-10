@@ -1378,5 +1378,42 @@ module.exports = function getPresets(eventmasterData, log) {
 		})
 	}
 
+	// Create source feedback presets - status indicators only, no actions
+	if (eventmasterData && eventmasterData.sources && Object.keys(eventmasterData.sources).length > 0) {
+		Object.keys(eventmasterData.sources).forEach((sourceKey) => {
+			const source = eventmasterData.sources[sourceKey]
+			const sourceNumber = source.id + 1 // Convert to 1-based numbering
+			
+			presets[`source_${sourceNumber}_feedback`] = {
+				type: 'button',
+				category: 'Sources Feedback',
+				name: `$(eventmaster:source_${sourceNumber}_name)`,
+				style: {
+					text: `$(eventmaster:source_${sourceNumber}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(64, 64, 64), // Default gray
+				},
+				steps: [
+					{
+						down: [], // No action when pressed
+						up: [],
+					},
+				],
+				feedbacks: [
+					{
+						feedbackId: 'source_active_simple',
+						options: {
+							source: sourceNumber,
+						},
+						style: {
+							bgcolor: combineRgb(255, 0, 0), // Red when active
+						},
+					},
+				],
+			}
+		})
+	}
+
 	return presets
 }
