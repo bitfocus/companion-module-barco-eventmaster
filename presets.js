@@ -1248,5 +1248,135 @@ module.exports = function getPresets(eventmasterData, log) {
 		})
 	}
 
+	// Add Arm/Unarm presets for Screen Destinations
+	if (eventmasterData.ScreenDestinations) {
+		Object.keys(eventmasterData.ScreenDestinations).forEach((key) => {
+			const screen = eventmasterData.ScreenDestinations[key]
+			const screenId = screen.id
+			const screenName = screen.Name
+
+			// Arm preset
+			presets[`screen_${screenId}_arm`] = {
+				type: 'button',
+				category: `Arm/Unarm Destinations`,
+				name: `Arm $(eventmaster:screen_${screenId}_name)`,
+				style: {
+					text: `ARM\\n$(eventmaster:screen_${screenId}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(0, 128, 0), // Green for arm
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'arm_unarm_destination',
+								options: {
+									destId: screenId,
+									arm: 1, // 1 = Arm
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+
+			// Unarm preset
+			presets[`screen_${screenId}_unarm`] = {
+				type: 'button',
+				category: `Arm/Unarm Destinations`,
+				name: `Unarm $(eventmaster:screen_${screenId}_name)`,
+				style: {
+					text: `UNARM\\n$(eventmaster:screen_${screenId}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(128, 0, 0), // Red for unarm
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'arm_unarm_destination',
+								options: {
+									destId: screenId,
+									arm: 0, // 0 = Unarm
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+		})
+	}
+
+	// Add Arm/Unarm presets for AUX Destinations
+	if (eventmasterData.AuxDestinations) {
+		Object.keys(eventmasterData.AuxDestinations).forEach((key) => {
+			const aux = eventmasterData.AuxDestinations[key]
+			const auxId = aux.id
+			const auxName = aux.Name
+
+			// Arm preset
+			presets[`aux_${auxId}_arm`] = {
+				type: 'button',
+				category: `Arm/Unarm Destinations`,
+				name: `Arm $(eventmaster:aux_${auxId}_name)`,
+				style: {
+					text: `ARM\\n$(eventmaster:aux_${auxId}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(0, 128, 0), // Green for arm
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'arm_unarm_aux_destination',
+								options: {
+									auxDestId: auxId,
+									arm: 1, // 1 = Arm
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+
+			// Unarm preset
+			presets[`aux_${auxId}_unarm`] = {
+				type: 'button',
+				category: `Arm/Unarm Destinations`,
+				name: `Unarm $(eventmaster:aux_${auxId}_name)`,
+				style: {
+					text: `UNARM\\n$(eventmaster:aux_${auxId}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(128, 0, 0), // Red for unarm
+				},
+				steps: [
+					{
+						down: [
+							{
+								actionId: 'arm_unarm_aux_destination',
+								options: {
+									auxDestId: auxId,
+									arm: 0, // 0 = Unarm
+								},
+							},
+						],
+						up: [],
+					},
+				],
+				feedbacks: [],
+			}
+		})
+	}
+
 	return presets
 }

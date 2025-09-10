@@ -546,6 +546,26 @@ class BarcoInstance extends InstanceBase {
 			})
 		}
 
+		// Add screen destination name variables
+		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
+			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
+				variables.push({ 
+					variableId: `screen_${screen.id}_name`, 
+					name: `Screen ${screen.id} Name` 
+				})
+			})
+		}
+
+		// Add AUX destination name variables
+		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
+			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
+				variables.push({ 
+					variableId: `aux_${aux.id}_name`, 
+					name: `AUX ${aux.id} Name` 
+				})
+			})
+		}
+
 		this.setVariableDefinitions(variables)
 		
 		// Auto-populate source monitoring variables
@@ -737,6 +757,20 @@ class BarcoInstance extends InstanceBase {
 			Object.values(this.eventmasterData.presets).forEach(preset => {
 				variableValues[`preset_${preset.id}_name`] = preset.Name ? _.unescape(preset.Name) : `Preset ${preset.id}`
 				variableValues[`preset_${preset.id}_number`] = preset.presetSno || preset.id || '?'
+			})
+		}
+
+		// Set screen destination name variables
+		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
+			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
+				variableValues[`screen_${screen.id}_name`] = screen.Name || `Screen ${screen.id}`
+			})
+		}
+
+		// Set AUX destination name variables
+		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
+			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
+				variableValues[`aux_${aux.id}_name`] = aux.Name || `AUX ${aux.id}`
 			})
 		}
 		
@@ -1863,6 +1897,41 @@ class BarcoInstance extends InstanceBase {
 				this.eventmaster.armUnarmDestination(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
+				})
+			},
+		}
+
+		// Arm/Unarm AUX Destination
+		actions['arm_unarm_aux_destination'] = {
+			name: 'Arm/Unarm AUX Destination',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'AUX Destination',
+					id: 'auxDestId',
+					choices: CHOICES_AUXDESTINATIONS,
+				},
+				{
+					type: 'dropdown',
+					label: 'Arm (true) or Unarm (false)',
+					id: 'arm',
+					choices: [
+						{ id: 1, label: 'Arm' },
+						{ id: 0, label: 'Unarm' },
+					],
+					default: 1,
+				},
+			],
+			callback: (action) => {
+				const params = {
+					ScreenDestination: [],
+					AuxDestination: [{ id: parseInt(action.options.auxDestId) }],
+					arm: parseInt(action.options.arm),
+				}
+				console.log('Arm/Unarm AUX Destination with params:', JSON.stringify(params))
+				this.eventmaster.armUnarmDestination(params, (err, res) => {
+					if (err) this.log('error', 'EventMaster Error: ' + err)
+					else this.log('debug', 'armUnarmAuxDestination response: ' + JSON.stringify(res))
 				})
 			},
 		}
