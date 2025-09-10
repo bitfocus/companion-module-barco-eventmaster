@@ -760,9 +760,8 @@ class BarcoInstance extends InstanceBase {
 				
 				if (pgmDests.length > 0 || pvwDests.length > 0) {
 					activeSources++
-					this.log('debug', `Source ${source.id + 1} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}] - Active: ${isActive ? 'Yes' : 'No'}`)
-				} else {
-					this.log('debug', `Source ${source.id + 1} (${source.Name}): Not active anywhere - Active: ${isActive ? 'Yes' : 'No'}`)
+					// Only log active sources to reduce noise
+					// this.log('debug', `Source ${source.id + 1} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}] - Active: ${isActive ? 'Yes' : 'No'}`)
 				}
 			})
 		}
