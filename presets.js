@@ -78,8 +78,9 @@ module.exports = function getPresets(eventmasterData, log) {
 		presets[`PVW_${eventmasterData.presets[key].id}`] = {
 			type: 'button',
 			category: 'Presets to PVW',
+			name: `$(eventmaster:preset_${eventmasterData.presets[key].id}_number) $(eventmaster:preset_${eventmasterData.presets[key].id}_name)`,
 			style: {
-				text: eventmasterData.presets[key].presetSno + ' ' + _.unescape(eventmasterData.presets[key].Name),
+				text: `$(eventmaster:preset_${eventmasterData.presets[key].id}_number)\\n$(eventmaster:preset_${eventmasterData.presets[key].id}_name)`,
 				size: '14',
 				color: combineRgb(0, 0, 0),
 				bgcolor: combineRgb(235, 235, 235),
@@ -103,8 +104,9 @@ module.exports = function getPresets(eventmasterData, log) {
 		presets[`PGM_${eventmasterData.presets[key].id}`] = {
 			type: 'button',
 			category: 'Presets to PGM',
+			name: `$(eventmaster:preset_${eventmasterData.presets[key].id}_number) $(eventmaster:preset_${eventmasterData.presets[key].id}_name)`,
 			style: {
-				text: eventmasterData.presets[key].presetSno + ' ' + _.unescape(eventmasterData.presets[key].Name),
+				text: `$(eventmaster:preset_${eventmasterData.presets[key].id}_number)\\n$(eventmaster:preset_${eventmasterData.presets[key].id}_name)`,
 				size: '14',
 				color: combineRgb(255, 0, 0),
 				bgcolor: combineRgb(235, 235, 235),

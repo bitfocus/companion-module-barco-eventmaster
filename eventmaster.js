@@ -385,6 +385,9 @@ class BarcoInstance extends InstanceBase {
 					})
 				})
 				this.eventmasterData.presets = this.convertArrayToObject(res.response, 'presetSno')
+				
+				// Update variables to include new preset names
+				this.updateDestinationVariables()
 			} catch (err) {
 				this.log('error', 'EventMaster Presets Error: ' + err)
 			}
@@ -525,6 +528,20 @@ class BarcoInstance extends InstanceBase {
 				variables.push({ 
 					variableId: `source_${source.id + 1}_is_active`, 
 					name: `${source.Name} - Is Active (PGM or PVW)` 
+				})
+			})
+		}
+
+		// Add preset name variables
+		if (this.eventmasterData && this.eventmasterData.presets) {
+			Object.values(this.eventmasterData.presets).forEach(preset => {
+				variables.push({ 
+					variableId: `preset_${preset.id}_name`, 
+					name: `Preset ${preset.presetSno || preset.id} Name` 
+				})
+				variables.push({ 
+					variableId: `preset_${preset.id}_number`, 
+					name: `Preset ${preset.presetSno || preset.id} Number` 
 				})
 			})
 		}
@@ -689,8 +706,8 @@ class BarcoInstance extends InstanceBase {
 		
 		if (this.eventmasterData && this.eventmasterData.sources) {
 			Object.values(this.eventmasterData.sources).forEach(source => {
-				const pgmDests = sourcePgmDestinations[source.id]
-				const pvwDests = sourcePvwDestinations[source.id]
+				const pgmDests = sourcePgmDestinations[source.id] || []
+				const pvwDests = sourcePvwDestinations[source.id] || []
 				const isActive = pgmDests.length > 0 || pvwDests.length > 0
 				
 				// Set source name
@@ -712,6 +729,14 @@ class BarcoInstance extends InstanceBase {
 					activeSources++
 					// this.log('debug', `Source ${source.id} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}]`)
 				}
+			})
+		}
+		
+		// Set preset name variables
+		if (this.eventmasterData && this.eventmasterData.presets) {
+			Object.values(this.eventmasterData.presets).forEach(preset => {
+				variableValues[`preset_${preset.id}_name`] = preset.Name ? _.unescape(preset.Name) : `Preset ${preset.id}`
+				variableValues[`preset_${preset.id}_number`] = preset.presetSno || preset.id || '?'
 			})
 		}
 		
