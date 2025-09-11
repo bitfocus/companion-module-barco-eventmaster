@@ -24,6 +24,8 @@ class BarcoInstance extends InstanceBase {
 		// Track dynamic variables
 		this.detectedCardSlots = []
 		this.frameVariableDefinitions = []
+		// Initialize variable change tracking to prevent unnecessary Stream Deck flashing
+		this.previousVariableValues = {}
 		this.CHOICES_FREEZE = [
 			{ label: 'Freeze', id: 1 },
 			{ label: 'Unfreeze', id: 0 },
@@ -568,6 +570,9 @@ class BarcoInstance extends InstanceBase {
 
 		this.setVariableDefinitions(variables)
 		
+		// Clear variable tracking since setVariableDefinitions resets all values
+		this.previousVariableValues = {}
+		
 		// Auto-populate source monitoring variables
 		this.autoPopulateSourceMonitoring()
 	}
@@ -583,6 +588,11 @@ class BarcoInstance extends InstanceBase {
 		if (!this.eventmaster) {
 			this.log('warning', 'EventMaster not connected, skipping source monitoring')
 			return
+		}
+		
+		// Initialize or retrieve previous variable values for change tracking
+		if (!this.previousVariableValues) {
+			this.previousVariableValues = {}
 		}
 		
 		// Initialize source tracking objects
@@ -607,7 +617,7 @@ class BarcoInstance extends InstanceBase {
 			
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
-					this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
+					// this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
 					
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
@@ -622,7 +632,7 @@ class BarcoInstance extends InstanceBase {
 						
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
-							this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
+							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
 							
 							const pgmBgLayer = content.BGLyr.find(layer => layer.id === 0)
 							if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined && pgmBgLayer.LastBGSourceIndex !== -1) {
@@ -646,7 +656,7 @@ class BarcoInstance extends InstanceBase {
 						
 						// Check active layers
 						if (content.Layers && content.Layers.length > 0) {
-							this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
+							// this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
 							
 							content.Layers.forEach(layer => {
 								// Check if layer is on PGM
@@ -657,7 +667,7 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1} (PgmMode: ${layer.PgmMode}, SrcIdx: ${layer.SrcIdx}, Freeze: ${layer.Freeze})`)
+										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1}`)
 									}
 								}
 								
@@ -669,14 +679,14 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1} (PvwMode: ${layer.PvwMode}, SrcIdx: ${layer.SrcIdx}, Freeze: ${layer.Freeze})`)
+										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1}`)
 									}
 								}
 								
-								// Debug log for inactive layers
-								if ((layer.PgmMode === 0 && layer.PvwMode === 0) || layer.Freeze > 0) {
-									this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: INACTIVE (PgmMode: ${layer.PgmMode}, PvwMode: ${layer.PvwMode}, Freeze: ${layer.Freeze}) - Source: ${layer.SrcIdx + 1}`)
-								}
+								// Only log inactive layers if you need detailed debugging
+								// if ((layer.PgmMode === 0 && layer.PvwMode === 0) || layer.Freeze > 0) {
+								//     this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: INACTIVE (PgmMode: ${layer.PgmMode}, PvwMode: ${layer.PvwMode}, Freeze: ${layer.Freeze}) - Source: ${layer.SrcIdx + 1}`)
+								// }
 							})
 						}
 					} else {
@@ -735,6 +745,7 @@ class BarcoInstance extends InstanceBase {
 
 		// Set variable values for all sources
 		const variableValues = {}
+		const changedVariables = {}
 		let activeSources = 0
 		
 		if (this.eventmasterData && this.eventmasterData.sources) {
@@ -743,20 +754,25 @@ class BarcoInstance extends InstanceBase {
 				const pvwDests = sourcePvwDestinations[source.id] || []
 				const isActive = pgmDests.length > 0 || pvwDests.length > 0
 				
-				// Set source name
-				variableValues[`source_${source.id + 1}_name`] = source.Name || `Source ${source.id + 1}`
+				// Calculate new values
+				const newValues = {
+					[`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
+					[`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 
+						? pgmDests.join(', ') 
+						: 'Not active on PGM',
+					[`source_${source.id + 1}_pvw_destinations`]: pvwDests.length > 0 
+						? pvwDests.join(', ') 
+						: 'Not active on PVW',
+					[`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No'
+				}
 				
-				// Set destination lists
-				variableValues[`source_${source.id + 1}_pgm_destinations`] = pgmDests.length > 0 
-					? pgmDests.join(', ') 
-					: 'Not active on PGM'
-					
-				variableValues[`source_${source.id + 1}_pvw_destinations`] = pvwDests.length > 0 
-					? pvwDests.join(', ') 
-					: 'Not active on PVW'
-					
-				// Set active status (true/false or Yes/No for better readability)
-				variableValues[`source_${source.id + 1}_is_active`] = isActive ? 'Yes' : 'No'
+				// Check for changes and only add changed variables
+				Object.entries(newValues).forEach(([key, value]) => {
+					if (this.previousVariableValues[key] !== value) {
+						changedVariables[key] = value
+						this.previousVariableValues[key] = value
+					}
+				})
 				
 				if (pgmDests.length > 0 || pvwDests.length > 0) {
 					activeSources++
@@ -769,26 +785,54 @@ class BarcoInstance extends InstanceBase {
 		// Set preset name variables
 		if (this.eventmasterData && this.eventmasterData.presets) {
 			Object.values(this.eventmasterData.presets).forEach(preset => {
-				variableValues[`preset_${preset.id}_name`] = preset.Name ? _.unescape(preset.Name) : `Preset ${preset.id}`
-				variableValues[`preset_${preset.id}_number`] = preset.presetSno || preset.id || '?'
+				const newValues = {
+					[`preset_${preset.id}_name`]: preset.Name ? _.unescape(preset.Name) : `Preset ${preset.id}`,
+					[`preset_${preset.id}_number`]: preset.presetSno || preset.id || '?'
+				}
+				
+				// Check for changes and only add changed variables
+				Object.entries(newValues).forEach(([key, value]) => {
+					if (this.previousVariableValues[key] !== value) {
+						changedVariables[key] = value
+						this.previousVariableValues[key] = value
+					}
+				})
 			})
 		}
 
 		// Set screen destination name variables
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
 			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
-				variableValues[`screen_${screen.id}_name`] = screen.Name || `Screen ${screen.id}`
+				const key = `screen_${screen.id}_name`
+				const value = screen.Name || `Screen ${screen.id}`
+				
+				if (this.previousVariableValues[key] !== value) {
+					changedVariables[key] = value
+					this.previousVariableValues[key] = value
+				}
 			})
 		}
 
 		// Set AUX destination name variables
 		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
 			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
-				variableValues[`aux_${aux.id}_name`] = aux.Name || `AUX ${aux.id}`
+				const key = `aux_${aux.id}_name`
+				const value = aux.Name || `AUX ${aux.id}`
+				
+				if (this.previousVariableValues[key] !== value) {
+					changedVariables[key] = value
+					this.previousVariableValues[key] = value
+				}
 			})
 		}
 		
-		this.setVariableValues(variableValues)
+		// Only update variables if there are actual changes
+		if (Object.keys(changedVariables).length > 0) {
+			this.setVariableValues(changedVariables)
+			this.log('debug', `Updated ${Object.keys(changedVariables).length} changed variables`)
+		} else {
+			this.log('debug', 'No variable changes detected, skipping update')
+		}
 		
 		// Update feedbacks to reflect current source activity
 		this.checkFeedbacks()
