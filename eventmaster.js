@@ -260,10 +260,10 @@ class BarcoInstance extends InstanceBase {
 					// Set all variable values
 					this.setVariableValues(variableValues)
 					
-					this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
-					if (frameData.Slot) {
-						this.log('debug', `Found ${frameData.Slot.length} card slots`)
-					}
+					// this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
+					// if (frameData.Slot) {
+					//	this.log('debug', `Found ${frameData.Slot.length} card slots`)
+					// }
 				} else {
 					this.log('warning', 'Frame settings data structure not recognized')
 				}
@@ -582,7 +582,7 @@ class BarcoInstance extends InstanceBase {
 	 * Shows which destinations each source is active on
 	 */
 	async autoPopulateSourceMonitoring() {
-		this.log('debug', 'Starting source monitoring auto-population...')
+		// this.log('debug', 'Starting source monitoring auto-population...')
 		
 		// Check if EventMaster is connected
 		if (!this.eventmaster) {
@@ -613,7 +613,7 @@ class BarcoInstance extends InstanceBase {
 
 		// Query all screen destinations to see what sources are active
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
-			this.log('debug', `Querying ${Object.keys(this.eventmasterData.ScreenDestinations).length} screen destinations...`)
+			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.ScreenDestinations).length} screen destinations...`)
 			
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
@@ -639,7 +639,7 @@ class BarcoInstance extends InstanceBase {
 								const sourceId = pgmBgLayer.LastBGSourceIndex
 								if (sourcePgmDestinations[sourceId]) {
 									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
-									this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId + 1}`)
+									// this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId + 1}`)
 								}
 							}
 							
@@ -649,7 +649,7 @@ class BarcoInstance extends InstanceBase {
 								const sourceId = pvwBgLayer.LastBGSourceIndex
 								if (sourcePvwDestinations[sourceId]) {
 									sourcePvwDestinations[sourceId].push(`Screen ${dest.Name}`)
-									this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId + 1}`)
+									// this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId + 1}`)
 								}
 							}
 						}
@@ -667,7 +667,7 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1}`)
+										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1}`)
 									}
 								}
 								
@@ -679,7 +679,7 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1}`)
+										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1}`)
 									}
 								}
 								
@@ -829,7 +829,7 @@ class BarcoInstance extends InstanceBase {
 		// Only update variables if there are actual changes
 		if (Object.keys(changedVariables).length > 0) {
 			this.setVariableValues(changedVariables)
-			this.log('debug', `Updated ${Object.keys(changedVariables).length} changed variables`)
+			// this.log('debug', `Updated ${Object.keys(changedVariables).length} changed variables`)
 		} else {
 			this.log('debug', 'No variable changes detected, skipping update')
 		}
