@@ -3,7 +3,7 @@
 	"legacy": [
 		"eventmaster"
 	],
-	"version": "4.2.3",
+	"version": "4.3.0",
 	"main": "eventmaster.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
