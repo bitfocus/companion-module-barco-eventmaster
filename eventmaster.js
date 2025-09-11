@@ -1075,10 +1075,16 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
+				let sourceId = parseInt(action.options.frzSource)
+				// Handle offset source IDs (convert back to real source ID)
+				if (sourceId >= 1000) {
+					sourceId = sourceId - 1000
+				}
+				
 				const params = {
 					type: 0, // 0 type is source
-					id: parseInt(action.options.frzSource),
-					Screengroup: 0, // 0 for all screengroups
+					id: sourceId,
+					screengroup: 0, // 0 for all screengroups
 					mode: parseInt(action.options.frzType), // 1 for freeze, 0 for unfreeze
 				}
 				this.eventmaster.freezeDestSource(params, (err, res) => {
@@ -1362,9 +1368,15 @@ class BarcoInstance extends InstanceBase {
 
 				// Program background (id: 0)
 				if (action.options.pgmBgSource && action.options.pgmBgSource !== '') {
+					let pgmBgSourceId = parseInt(action.options.pgmBgSource)
+					// Handle offset source IDs (convert back to real source ID)
+					if (pgmBgSourceId >= 1000) {
+						pgmBgSourceId = pgmBgSourceId - 1000
+					}
+					
 					bgLayers.push({
 						id: 0,
-						LastBGSourceIndex: parseInt(action.options.pgmBgSource),
+						LastBGSourceIndex: pgmBgSourceId,
 						BGShowMatte: action.options.pgmBgMatte ? 1 : 0,
 						BGColor: [{ id: 0, Red: 0, Green: 0, Blue: 0 }],
 					})
@@ -1373,9 +1385,15 @@ class BarcoInstance extends InstanceBase {
 
 				// Preview background (id: 1)
 				if (action.options.pvwBgSource && action.options.pvwBgSource !== '') {
+					let pvwBgSourceId = parseInt(action.options.pvwBgSource)
+					// Handle offset source IDs (convert back to real source ID)
+					if (pvwBgSourceId >= 1000) {
+						pvwBgSourceId = pvwBgSourceId - 1000
+					}
+					
 					bgLayers.push({
 						id: 1,
-						LastBGSourceIndex: parseInt(action.options.pvwBgSource),
+						LastBGSourceIndex: pvwBgSourceId,
 						BGShowMatte: action.options.pvwBgMatte ? 1 : 0,
 						BGColor: [{ id: 0, Red: 0, Green: 0, Blue: 0 }],
 					})
@@ -1399,7 +1417,12 @@ class BarcoInstance extends InstanceBase {
 
 					// Set layer source
 					if (action.options.layerSource && action.options.layerSource !== '') {
-						layer.LastSrcIdx = parseInt(action.options.layerSource)
+						let layerSourceId = parseInt(action.options.layerSource)
+						// Handle offset source IDs (convert back to real source ID)
+						if (layerSourceId >= 1000) {
+							layerSourceId = layerSourceId - 1000
+						}
+						layer.LastSrcIdx = layerSourceId
 					}
 
 					// Set layer mode
@@ -1485,23 +1508,23 @@ class BarcoInstance extends InstanceBase {
 		}
 
 		// Power Status ***TESTED
-		actions['power_status'] = {
-			name: 'Get Power Status',
-			options: [],
-			callback: () => {
-				this.eventmaster.powerStatus((err, res) => {
-					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else {
-						this.log('debug', 'powerStatus response: ' + JSON.stringify(res))
-						const key = Object.keys(res.response)[0]
-						this.setVariableValues({
-							power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
-							power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
-						})
-					}
-				})
-			},
-		}
+		// actions['power_status'] = {
+		// 	name: 'Get Power Status',
+		// 	options: [],
+		// 	callback: () => {
+		// 		this.eventmaster.powerStatus((err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else {
+		// 				this.log('debug', 'powerStatus response: ' + JSON.stringify(res))
+		// 				const key = Object.keys(res.response)[0]
+		// 				this.setVariableValues({
+		// 					power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
+		// 					power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
+		// 				})
+		// 			}
+		// 		})
+		// 	},
+		// }
 
 		// Save Preset ***TESTED
 		actions['save_preset'] = {
@@ -1738,107 +1761,107 @@ class BarcoInstance extends InstanceBase {
 		// 	},
 		// }
 		// List Operators ***TESTED
-		actions['list_operators'] = {
-			name: 'List Operators',
-			options: [],
-			callback: () => {
-				this.eventmaster.listOperators((err, res) => {
-					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'listOperators response: ' + JSON.stringify(res))
-				})
-			},
-		}
+		// actions['list_operators'] = {
+		// 	name: 'List Operators',
+		// 	options: [],
+		// 	callback: () => {
+		// 		this.eventmaster.listOperators((err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else this.log('debug', 'listOperators response: ' + JSON.stringify(res))
+		// 		})
+		// 	},
+		// }
 
 		// List MVR Presets ***NEW API
-		actions['list_mvr_presets'] = {
-			name: 'List MVR Presets',
-			options: [],
-			callback: () => {
-				this.eventmaster.listMvrPreset({ id: -1 }, (err, res) => {
-					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'listMvrPreset response: ' + JSON.stringify(res))
-				})
-			},
-		}
-		actions['getFrameSettings'] = {
-			name: 'Get Frame Settings',
-			options: [],
-			callback: () => {
-				this.eventmaster.getFrameSettings({}, (err, res) => {
-					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else {
-						console.log('Frame Settings Action Response:', JSON.stringify(res, null, 2))
-						
-						// Parse the correct structure
-						let frameData = null
-						if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
-							// Frame is a single object, not an array
-							frameData = res.response.System.FrameCollection.Frame
-						}
-						
-						if (frameData) {
-							const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
-							const version = frameData.Version || 'Unknown'
-							const osVersion = frameData.OSVersion || 'Unknown'
-							
-							this.eventmasterData.frameIP = frameIP
-							this.eventmasterData.version = version
-							this.eventmasterData.OSVersion = osVersion
-							
-							// Start with basic variables
-							const variableValues = {
-								frame_IP: frameIP,
-								frame_version: version,
-								frame_OSVersion: osVersion,
-							}
-							
-							// Process card slots if they exist
-							if (frameData.Slot && Array.isArray(frameData.Slot)) {
-								frameData.Slot.forEach((slot, index) => {
-									if (slot.Card) {
-										const slotNum = index + 1
-										const card = slot.Card
-										
-										// Build health status
-										let healthStatus = 'OK'
-										if (card.OverTemp === 1 && card.FanWarn === 1) {
-											healthStatus = 'Over Temp + Fan Warning'
-										} else if (card.OverTemp === 1) {
-											healthStatus = 'Over Temperature'
-										} else if (card.FanWarn === 1) {
-											healthStatus = 'Fan Warning'
-										}
-										
-										// Combine all card info into a single string
-										const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
-										variableValues[`card${slotNum}_info`] = cardInfo
-									}
-								})
-							}
-							
-							// Add SysCard information if available
-							if (frameData.SysCard) {
-								let sysHealthStatus = 'OK'
-								if (frameData.SysCard.OverTemp === 1 && frameData.SysCard.FanWarn === 1) {
-									sysHealthStatus = 'Over Temp + Fan Warning'
-								} else if (frameData.SysCard.OverTemp === 1) {
-									sysHealthStatus = 'Over Temperature'
-								} else if (frameData.SysCard.FanWarn === 1) {
-									sysHealthStatus = 'Fan Warning'
-								}
-								
-								const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
-								variableValues.syscard_info = sysCardInfo
-							}
-							
-							this.setVariableValues(variableValues)
-							
-							this.log('debug', `Frame Settings Action: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
-						}
-					}
-				})
-			},
-		}
+		// actions['list_mvr_presets'] = {
+		// 	name: 'List MVR Presets',
+		// 	options: [],
+		// 	callback: () => {
+		// 		this.eventmaster.listMvrPreset({ id: -1 }, (err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else this.log('debug', 'listMvrPreset response: ' + JSON.stringify(res))
+		// 		})
+		// 	},
+		// }
+		// actions['getFrameSettings'] = {
+		// 	name: 'Get Frame Settings',
+		// 	options: [],
+		// 	callback: () => {
+		// 		this.eventmaster.getFrameSettings({}, (err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else {
+		// 				console.log('Frame Settings Action Response:', JSON.stringify(res, null, 2))
+		// 				
+		// 				// Parse the correct structure
+		// 				let frameData = null
+		// 				if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
+		// 					// Frame is a single object, not an array
+		// 					frameData = res.response.System.FrameCollection.Frame
+		// 				}
+		// 				
+		// 				if (frameData) {
+		// 					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
+		// 					const version = frameData.Version || 'Unknown'
+		// 					const osVersion = frameData.OSVersion || 'Unknown'
+		// 					
+		// 					this.eventmasterData.frameIP = frameIP
+		// 					this.eventmasterData.version = version
+		// 					this.eventmasterData.OSVersion = osVersion
+		// 					
+		// 					// Start with basic variables
+		// 					const variableValues = {
+		// 						frame_IP: frameIP,
+		// 						frame_version: version,
+		// 						frame_OSVersion: osVersion,
+		// 					}
+		// 					
+		// 					// Process card slots if they exist
+		// 					if (frameData.Slot && Array.isArray(frameData.Slot)) {
+		// 						frameData.Slot.forEach((slot, index) => {
+		// 							if (slot.Card) {
+		// 								const slotNum = index + 1
+		// 								const card = slot.Card
+		// 								
+		// 								// Build health status
+		// 								let healthStatus = 'OK'
+		// 								if (card.OverTemp === 1 && card.FanWarn === 1) {
+		// 									healthStatus = 'Over Temp + Fan Warning'
+		// 								} else if (card.OverTemp === 1) {
+		// 									healthStatus = 'Over Temperature'
+		// 								} else if (card.FanWarn === 1) {
+		// 									healthStatus = 'Fan Warning'
+		// 								}
+		// 								
+		// 								// Combine all card info into a single string
+		// 								const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
+		// 								variableValues[`card${slotNum}_info`] = cardInfo
+		// 							}
+		// 						})
+		// 					}
+		// 					
+		// 					// Add SysCard information if available
+		// 					if (frameData.SysCard) {
+		// 						let sysHealthStatus = 'OK'
+		// 						if (frameData.SysCard.OverTemp === 1 && frameData.SysCard.FanWarn === 1) {
+		// 							sysHealthStatus = 'Over Temp + Fan Warning'
+		// 						} else if (frameData.SysCard.OverTemp === 1) {
+		// 							sysHealthStatus = 'Over Temperature'
+		// 						} else if (frameData.SysCard.FanWarn === 1) {
+		// 							sysHealthStatus = 'Fan Warning'
+		// 						}
+		// 						
+		// 						const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
+		// 						variableValues.syscard_info = sysCardInfo
+		// 					}
+		// 					
+		// 					this.setVariableValues(variableValues)
+		// 					
+		// 					this.log('debug', `Frame Settings Action: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
+		// 				}
+		// 			}
+		// 		})
+		// 	},
+		// }
 
 		// Activate MVR Preset ***NEW API
 		actions['activate_mvr_preset'] = {
@@ -2027,31 +2050,31 @@ class BarcoInstance extends InstanceBase {
 		}
 
 		// List Source Main Backup
-		actions['list_source_main_backup'] = {
-			name: 'List Source Main Backup',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'Input Type',
-					id: 'inputType',
-					choices: [
-						{ id: -1, label: 'All (Inputs + Background)' },
-						{ id: 0, label: 'Inputs Only' },
-						{ id: 1, label: 'Background Only' },
-					],
-					default: -1,
-				},
-			],
-			callback: (action) => {
-				const params = {
-					inputType: parseInt(action.options.inputType),
-				}
-				this.eventmaster.listSourceMainBackup(params, (err, res) => {
-					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'listSourceMainBackup response: ' + JSON.stringify(res))
-				})
-			},
-		}
+		// actions['list_source_main_backup'] = {
+		// 	name: 'List Source Main Backup',
+		// 	options: [
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'Input Type',
+		// 			id: 'inputType',
+		// 			choices: [
+		// 				{ id: -1, label: 'All (Inputs + Background)' },
+		// 				{ id: 0, label: 'Inputs Only' },
+		// 				{ id: 1, label: 'Background Only' },
+		// 			],
+		// 			default: -1,
+		// 		},
+		// 	],
+		// 	callback: (action) => {
+		// 		const params = {
+		// 			inputType: parseInt(action.options.inputType),
+		// 		}
+		// 		this.eventmaster.listSourceMainBackup(params, (err, res) => {
+		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
+		// 			else this.log('debug', 'listSourceMainBackup response: ' + JSON.stringify(res))
+		// 		})
+		// 	},
+		// }
 
 		// Activate Source Main Backup
 		actions['activate_source_main_backup'] = {
@@ -2125,19 +2148,32 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
+				// Handle offset source IDs (convert back to real source IDs)
+				let inputId = parseInt(action.options.inputId)
+				if (inputId >= 1000) inputId = inputId - 1000
+				
+				let backup1SourceId = parseInt(action.options.backup1SourceId)
+				if (backup1SourceId >= 1000) backup1SourceId = backup1SourceId - 1000
+				
+				let backup2SourceId = parseInt(action.options.backup2SourceId)
+				if (backup2SourceId >= 1000) backup2SourceId = backup2SourceId - 1000
+				
+				let backup3SourceId = parseInt(action.options.backup3SourceId)
+				if (backup3SourceId >= 1000) backup3SourceId = backup3SourceId - 1000
+				
 				const params = {
-					inputId: parseInt(action.options.inputId),
+					inputId: inputId,
 					Backup1: {
 						SrcType: parseInt(action.options.backup1SrcType),
-						SourceId: parseInt(action.options.backup1SourceId),
+						SourceId: backup1SourceId,
 					},
 					Backup2: {
 						SrcType: parseInt(action.options.backup2SrcType),
-						SourceId: parseInt(action.options.backup2SourceId),
+						SourceId: backup2SourceId,
 					},
 					Backup3: {
 						SrcType: parseInt(action.options.backup3SrcType),
-						SourceId: parseInt(action.options.backup3SourceId),
+						SourceId: backup3SourceId,
 					},
 					BackUpState: parseInt(action.options.backupState),
 				}
@@ -2160,8 +2196,14 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
+				let sourceId = parseInt(action.options.sourceId)
+				// Handle offset source IDs (convert back to real source ID)
+				if (sourceId >= 1000) {
+					sourceId = sourceId - 1000
+				}
+				
 				const params = {
-					id: parseInt(action.options.sourceId),
+					id: sourceId,
 				}
 				this.eventmaster.resetSourceMainBackup(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
@@ -2184,114 +2226,114 @@ class BarcoInstance extends InstanceBase {
 		}
 
 		// List Screen Destination Content (Get Active PGM Source)
-		actions['list_screen_content'] = {
-			name: 'List Screen Destination Content',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'Screen Destination',
-					id: 'screenId',
-					choices: CHOICES_SCREENDESTINATIONS,
-				},
-			],
-			callback: (action) => {
-				this.eventmaster.listContent(parseInt(action.options.screenId), (err, res) => {
-					if (err) {
-						this.log('error', 'EventMaster Error: ' + err)
-					} else {
-						this.log('debug', 'listContent response: ' + JSON.stringify(res))
-						
-						// Display information about this destination
-						if (res && res.response) {
-							const content = res.response
-							let pgmInfo = []
-							let pvwInfo = []
-							
-							// Check background layers
-							if (content.BGLayers && content.BGLayers.length > 0) {
-								const pgmBgLayer = content.BGLayers.find(layer => layer.id === 0)
-								if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined) {
-									const sourceName = this.findSourceNameById(pgmBgLayer.LastBGSourceIndex)
-									pgmInfo.push(`Background: ${sourceName}`)
-								}
-								
-								const pvwBgLayer = content.BGLayers.find(layer => layer.id === 1)
-								if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined) {
-									const sourceName = this.findSourceNameById(pvwBgLayer.LastBGSourceIndex)
-									pvwInfo.push(`Background: ${sourceName}`)
-								}
-							}
-							
-							// Check active layers
-							if (content.Layers && content.Layers.length > 0) {
-								content.Layers.forEach(layer => {
-									if (layer.LastSrcIndex !== undefined) {
-										const sourceName = this.findSourceNameById(layer.LastSrcIndex)
-										pgmInfo.push(`Layer ${layer.id}: ${sourceName}`)
-									}
-									if (layer.PvwLastSrcIndex !== undefined) {
-										const sourceName = this.findSourceNameById(layer.PvwLastSrcIndex)
-										pvwInfo.push(`Layer ${layer.id}: ${sourceName}`)
-									}
-								})
-							}
-							
-							const pgmSummary = pgmInfo.length > 0 ? pgmInfo.join(', ') : 'No PGM content'
-							const pvwSummary = pvwInfo.length > 0 ? pvwInfo.join(', ') : 'No PVW content'
-							
-							this.log('info', `Screen ${action.options.screenId} - PGM: ${pgmSummary} | PVW: ${pvwSummary}`)
-						}
-						
-						// Refresh source monitoring after checking this destination
-						this.autoPopulateSourceMonitoring()
-					}
-				})
-			},
-		}
+		// actions['list_screen_content'] = {
+		// 	name: 'List Screen Destination Content',
+		// 	options: [
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'Screen Destination',
+		// 			id: 'screenId',
+		// 			choices: CHOICES_SCREENDESTINATIONS,
+		// 		},
+		// 	],
+		// 	callback: (action) => {
+		// 		this.eventmaster.listContent(parseInt(action.options.screenId), (err, res) => {
+		// 			if (err) {
+		// 				this.log('error', 'EventMaster Error: ' + err)
+		// 			} else {
+		// 				this.log('debug', 'listContent response: ' + JSON.stringify(res))
+		// 				
+		// 				// Display information about this destination
+		// 				if (res && res.response) {
+		// 					const content = res.response
+		// 					let pgmInfo = []
+		// 					let pvwInfo = []
+		// 					
+		// 					// Check background layers
+		// 					if (content.BGLayers && content.BGLayers.length > 0) {
+		// 						const pgmBgLayer = content.BGLayers.find(layer => layer.id === 0)
+		// 						if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined) {
+		// 							const sourceName = this.findSourceNameById(pgmBgLayer.LastBGSourceIndex)
+		// 							pgmInfo.push(`Background: ${sourceName}`)
+		// 						}
+		// 						
+		// 						const pvwBgLayer = content.BGLayers.find(layer => layer.id === 1)
+		// 						if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined) {
+		// 							const sourceName = this.findSourceNameById(pvwBgLayer.LastBGSourceIndex)
+		// 							pvwInfo.push(`Background: ${sourceName}`)
+		// 						}
+		// 					}
+		// 					
+		// 					// Check active layers
+		// 					if (content.Layers && content.Layers.length > 0) {
+		// 						content.Layers.forEach(layer => {
+		// 							if (layer.LastSrcIndex !== undefined) {
+		// 								const sourceName = this.findSourceNameById(layer.LastSrcIndex)
+		// 								pgmInfo.push(`Layer ${layer.id}: ${sourceName}`)
+		// 							}
+		// 							if (layer.PvwLastSrcIndex !== undefined) {
+		// 								const sourceName = this.findSourceNameById(layer.PvwLastSrcIndex)
+		// 								pvwInfo.push(`Layer ${layer.id}: ${sourceName}`)
+		// 							}
+		// 						})
+		// 					}
+		// 					
+		// 					const pgmSummary = pgmInfo.length > 0 ? pgmInfo.join(', ') : 'No PGM content'
+		// 					const pvwSummary = pvwInfo.length > 0 ? pvwInfo.join(', ') : 'No PVW content'
+		// 					
+		// 					this.log('info', `Screen ${action.options.screenId} - PGM: ${pgmSummary} | PVW: ${pvwSummary}`)
+		// 				}
+		// 				
+		// 				// Refresh source monitoring after checking this destination
+		// 				this.autoPopulateSourceMonitoring()
+		// 			}
+		// 		})
+		// 	},
+		// }
 
 		// List AUX Destination Content (Get Active PGM Source)
-		actions['list_aux_content'] = {
-			name: 'List AUX Destination Content',
-			options: [
-				{
-					type: 'dropdown',
-					label: 'AUX Destination',
-					id: 'auxId',
-					choices: CHOICES_AUXDESTINATIONS,
-				},
-			],
-			callback: (action) => {
-				this.eventmaster.listAuxContent(parseInt(action.options.auxId), (err, res) => {
-					if (err) {
-						this.log('error', 'EventMaster Error: ' + err)
-					} else {
-						this.log('debug', 'listAuxContent response: ' + JSON.stringify(res))
-						
-						// Display information about this AUX destination
-						if (res && res.response) {
-							const auxContent = res.response
-							let pgmSourceInfo = 'No PGM source'
-							let pvwSourceInfo = 'No PVW source'
-							
-							if (auxContent.PgmLastSrcIndex !== undefined) {
-								const sourceName = this.findSourceNameById(auxContent.PgmLastSrcIndex)
-								pgmSourceInfo = `${sourceName} (ID: ${auxContent.PgmLastSrcIndex})`
-							}
-							
-							if (auxContent.PvwLastSrcIndex !== undefined) {
-								const sourceName = this.findSourceNameById(auxContent.PvwLastSrcIndex)
-								pvwSourceInfo = `${sourceName} (ID: ${auxContent.PvwLastSrcIndex})`
-							}
-							
-							this.log('info', `AUX ${action.options.auxId} - PGM: ${pgmSourceInfo} | PVW: ${pvwSourceInfo}`)
-						}
-						
-						// Refresh source monitoring after checking this destination
-						this.autoPopulateSourceMonitoring()
-					}
-				})
-			},
-		}
+		// actions['list_aux_content'] = {
+		// 	name: 'List AUX Destination Content',
+		// 	options: [
+		// 		{
+		// 			type: 'dropdown',
+		// 			label: 'AUX Destination',
+		// 			id: 'auxId',
+		// 			choices: CHOICES_AUXDESTINATIONS,
+		// 		},
+		// 	],
+		// 	callback: (action) => {
+		// 		this.eventmaster.listAuxContent(parseInt(action.options.auxId), (err, res) => {
+		// 			if (err) {
+		// 				this.log('error', 'EventMaster Error: ' + err)
+		// 			} else {
+		// 				this.log('debug', 'listAuxContent response: ' + JSON.stringify(res))
+		// 				
+		// 				// Display information about this AUX destination
+		// 				if (res && res.response) {
+		// 					const auxContent = res.response
+		// 					let pgmSourceInfo = 'No PGM source'
+		// 					let pvwSourceInfo = 'No PVW source'
+		// 					
+		// 					if (auxContent.PgmLastSrcIndex !== undefined) {
+		// 						const sourceName = this.findSourceNameById(auxContent.PgmLastSrcIndex)
+		// 						pgmSourceInfo = `${sourceName} (ID: ${auxContent.PgmLastSrcIndex})`
+		// 					}
+		// 					
+		// 					if (auxContent.PvwLastSrcIndex !== undefined) {
+		// 						const sourceName = this.findSourceNameById(auxContent.PvwLastSrcIndex)
+		// 						pvwSourceInfo = `${sourceName} (ID: ${auxContent.PvwLastSrcIndex})`
+		// 					}
+		// 					
+		// 					this.log('info', `AUX ${action.options.auxId} - PGM: ${pgmSourceInfo} | PVW: ${pvwSourceInfo}`)
+		// 				}
+		// 				
+		// 				// Refresh source monitoring after checking this destination
+		// 				this.autoPopulateSourceMonitoring()
+		// 			}
+		// 		})
+		// 	},
+		// }
 
 		return actions
 	}
