@@ -374,6 +374,45 @@ class BarcoInstance extends InstanceBase {
 		}, {})
 	}
 
+	// Helper function to convert dropdown index to actual EventMaster source ID
+	getActualSourceId = (dropdownIndex) => {
+		const sources = Object.values(this.eventmasterData.sources)
+		if (dropdownIndex >= 0 && dropdownIndex < sources.length) {
+			const selectedSource = sources[dropdownIndex]
+			this.log('debug', `Source lookup: dropdown index ${dropdownIndex} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`)
+			
+			// Use InputCfgIndex for inputs (>=0), use StillIndex for stills (InputCfgIndex=-1)
+			let sourceIdToUse
+			let sourceType
+			
+			if (selectedSource.InputCfgIndex !== undefined && selectedSource.InputCfgIndex >= 0) {
+				// Input source - use InputCfgIndex
+				sourceIdToUse = selectedSource.InputCfgIndex
+				sourceType = 'Input'
+			} else {
+				// Still source - try StillIndex first, fallback to id if StillIndex is undefined
+				sourceIdToUse = (selectedSource.StillIndex !== undefined) ? selectedSource.StillIndex : selectedSource.id
+				sourceType = 'Still'
+			}
+			
+			this.log('debug', `Using source ID: ${sourceIdToUse} (${sourceType})`)
+			return sourceIdToUse
+		}
+		this.log('error', `Invalid source dropdown index: ${dropdownIndex}`)
+		return dropdownIndex // Fallback to original value if not found
+	}
+
+	// Helper function to get SrcType based on InputCfgIndex
+	getSourceType = (dropdownIndex) => {
+		const sources = Object.values(this.eventmasterData.sources)
+		if (dropdownIndex >= 0 && dropdownIndex < sources.length) {
+			const selectedSource = sources[dropdownIndex]
+			// 0 = Input (InputCfgIndex >= 0), 1 = Still (InputCfgIndex = -1)
+			return (selectedSource.InputCfgIndex !== undefined && selectedSource.InputCfgIndex >= 0) ? 0 : 1
+		}
+		return 0 // Default to Input if not found
+	}
+
 	// Data fetchers using new API
 	async getPresetsFromEventmaster() {
 		if (this.eventmaster) {
@@ -406,6 +445,13 @@ class BarcoInstance extends InstanceBase {
 					})
 				})
 				this.eventmasterData.sources = this.convertArrayToObject(res.response, 'Name')
+				
+				// // Debug: Show all sources for indexing troubleshooting
+				// this.log('info', '=== ALL SOURCES DEBUG ===')
+				// Object.values(this.eventmasterData.sources).forEach((source, index) => {
+				// 	this.log('info', `Array Index: ${index} | EventMaster ID: ${source.id} | InputCfgIndex: ${source.InputCfgIndex} | StillIndex: ${source.StillIndex} | SrcType: ${source.SrcType} | Name: "${source.Name}"`)
+				// })
+				// this.log('info', '=== END SOURCES DEBUG ===')
 			} catch (err) {
 				this.log('error', 'EventMaster Sources Error: ' + err)
 			}
@@ -864,14 +910,17 @@ class BarcoInstance extends InstanceBase {
 				label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
 				id: preset.id,
 			}))
-		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => ({
-			label: source.Name,
-			id: source.id + 1000, // Offset to avoid conflict with 0, -1, and empty string
-			actualSourceId: source.id, // Keep the real source ID for later use
-			InputCfgIndex: source.InputCfgIndex,
-			SrcType: source.SrcType,
-			StillIndex: source.StillIndex,
-		}))
+		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source, index) => {
+			const sourceType = (source.InputCfgIndex !== undefined && source.InputCfgIndex >= 0) ? 'Input' : 'Still'
+			return {
+				label: `${source.Name} (${sourceType})`,
+				id: index, // Use array index as dropdown ID (0, 1, 2, 3...)
+				actualSourceId: source.id, // Keep the real EventMaster source ID for API calls
+				InputCfgIndex: source.InputCfgIndex,
+				SrcType: source.SrcType,
+				StillIndex: source.StillIndex,
+			}
+		})
 		const CHOICES_CUES = Object.values(this.eventmasterData.cues).map((cue) => ({
 			label: cue.Name,
 			id: cue.id,
@@ -1075,11 +1124,8 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				let sourceId = parseInt(action.options.frzSource)
-				// Handle offset source IDs (convert back to real source ID)
-				if (sourceId >= 1000) {
-					sourceId = sourceId - 1000
-				}
+				const dropdownIndex = parseInt(action.options.frzSource)
+				const sourceId = this.getActualSourceId(dropdownIndex)
 				
 				const params = {
 					type: 0, // 0 type is source
@@ -1368,11 +1414,7 @@ class BarcoInstance extends InstanceBase {
 
 				// Program background (id: 0)
 				if (action.options.pgmBgSource && action.options.pgmBgSource !== '') {
-					let pgmBgSourceId = parseInt(action.options.pgmBgSource)
-					// Handle offset source IDs (convert back to real source ID)
-					if (pgmBgSourceId >= 1000) {
-						pgmBgSourceId = pgmBgSourceId - 1000
-					}
+					const pgmBgSourceId = this.getActualSourceId(parseInt(action.options.pgmBgSource))
 					
 					bgLayers.push({
 						id: 0,
@@ -1385,11 +1427,7 @@ class BarcoInstance extends InstanceBase {
 
 				// Preview background (id: 1)
 				if (action.options.pvwBgSource && action.options.pvwBgSource !== '') {
-					let pvwBgSourceId = parseInt(action.options.pvwBgSource)
-					// Handle offset source IDs (convert back to real source ID)
-					if (pvwBgSourceId >= 1000) {
-						pvwBgSourceId = pvwBgSourceId - 1000
-					}
+					const pvwBgSourceId = this.getActualSourceId(parseInt(action.options.pvwBgSource))
 					
 					bgLayers.push({
 						id: 1,
@@ -1417,11 +1455,7 @@ class BarcoInstance extends InstanceBase {
 
 					// Set layer source
 					if (action.options.layerSource && action.options.layerSource !== '') {
-						let layerSourceId = parseInt(action.options.layerSource)
-						// Handle offset source IDs (convert back to real source ID)
-						if (layerSourceId >= 1000) {
-							layerSourceId = layerSourceId - 1000
-						}
+						const layerSourceId = this.getActualSourceId(parseInt(action.options.layerSource))
 						layer.LastSrcIdx = layerSourceId
 					}
 
@@ -2088,45 +2122,15 @@ class BarcoInstance extends InstanceBase {
 				},
 				{
 					type: 'dropdown',
-					label: 'Backup 1 Source Type',
-					id: 'backup1SrcType',
-					choices: [
-						{ id: 0, label: 'Input' },
-						{ id: 1, label: 'Still' },
-					],
-					default: 0,
-				},
-				{
-					type: 'dropdown',
 					label: 'Backup 1 Source',
 					id: 'backup1SourceId',
 					choices: CHOICES_SOURCES,
 				},
 				{
 					type: 'dropdown',
-					label: 'Backup 2 Source Type',
-					id: 'backup2SrcType',
-					choices: [
-						{ id: 0, label: 'Input' },
-						{ id: 1, label: 'Still' },
-					],
-					default: 0,
-				},
-				{
-					type: 'dropdown',
 					label: 'Backup 2 Source',
 					id: 'backup2SourceId',
 					choices: CHOICES_SOURCES,
-				},
-				{
-					type: 'dropdown',
-					label: 'Backup 3 Source Type',
-					id: 'backup3SrcType',
-					choices: [
-						{ id: 0, label: 'Input' },
-						{ id: 1, label: 'Still' },
-					],
-					default: 0,
 				},
 				{
 					type: 'dropdown',
@@ -2148,35 +2152,38 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				// Handle offset source IDs (convert back to real source IDs)
-				let inputId = parseInt(action.options.inputId)
-				if (inputId >= 1000) inputId = inputId - 1000
+				// Convert dropdown indices to actual EventMaster source IDs and auto-detect types
+				this.log('debug', `Source Main Backup: Raw options - inputId: ${action.options.inputId}, backup1: ${action.options.backup1SourceId}, backup2: ${action.options.backup2SourceId}, backup3: ${action.options.backup3SourceId}`)
 				
-				let backup1SourceId = parseInt(action.options.backup1SourceId)
-				if (backup1SourceId >= 1000) backup1SourceId = backup1SourceId - 1000
+				const inputId = this.getActualSourceId(parseInt(action.options.inputId))
+				const backup1SourceId = this.getActualSourceId(parseInt(action.options.backup1SourceId))
+				const backup2SourceId = this.getActualSourceId(parseInt(action.options.backup2SourceId))
+				const backup3SourceId = this.getActualSourceId(parseInt(action.options.backup3SourceId))
 				
-				let backup2SourceId = parseInt(action.options.backup2SourceId)
-				if (backup2SourceId >= 1000) backup2SourceId = backup2SourceId - 1000
+				// Auto-detect source types based on InputCfgIndex
+				const backup1SrcType = this.getSourceType(parseInt(action.options.backup1SourceId))
+				const backup2SrcType = this.getSourceType(parseInt(action.options.backup2SourceId))
+				const backup3SrcType = this.getSourceType(parseInt(action.options.backup3SourceId))
 				
-				let backup3SourceId = parseInt(action.options.backup3SourceId)
-				if (backup3SourceId >= 1000) backup3SourceId = backup3SourceId - 1000
+				this.log('debug', `Source Main Backup: Resolved IDs - inputId: ${inputId}, backup1: ${backup1SourceId} (type ${backup1SrcType}), backup2: ${backup2SourceId} (type ${backup2SrcType}), backup3: ${backup3SourceId} (type ${backup3SrcType})`)
 				
 				const params = {
 					inputId: inputId,
 					Backup1: {
-						SrcType: parseInt(action.options.backup1SrcType),
+						SrcType: backup1SrcType,
 						SourceId: backup1SourceId,
 					},
 					Backup2: {
-						SrcType: parseInt(action.options.backup2SrcType),
+						SrcType: backup2SrcType,
 						SourceId: backup2SourceId,
 					},
 					Backup3: {
-						SrcType: parseInt(action.options.backup3SrcType),
+						SrcType: backup3SrcType,
 						SourceId: backup3SourceId,
 					},
 					BackUpState: parseInt(action.options.backupState),
 				}
+				this.log('debug', 'Activating Source Main Backup with params: ' + JSON.stringify(params))
 				this.eventmaster.activateSourceMainBackup(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'activateSourceMainBackup response: ' + JSON.stringify(res))
@@ -2196,11 +2203,8 @@ class BarcoInstance extends InstanceBase {
 				},
 			],
 			callback: (action) => {
-				let sourceId = parseInt(action.options.sourceId)
-				// Handle offset source IDs (convert back to real source ID)
-				if (sourceId >= 1000) {
-					sourceId = sourceId - 1000
-				}
+				const dropdownIndex = parseInt(action.options.sourceId)
+				const sourceId = this.getActualSourceId(dropdownIndex)
 				
 				const params = {
 					id: sourceId,
