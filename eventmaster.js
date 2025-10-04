@@ -1,4 +1,5 @@
 const EventMaster = require('barco-eventmaster')
+const os = require('os')
 const { InstanceBase, InstanceStatus, Regex, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
 const getPresets = require('./presets')
@@ -26,6 +27,7 @@ class BarcoInstance extends InstanceBase {
 		this.frameVariableDefinitions = []
 		// Initialize variable change tracking to prevent unnecessary Stream Deck flashing
 		this.previousVariableValues = {}
+		this.lastVariableDefinitionsHash = null
 		this.CHOICES_FREEZE = [
 			{ label: 'Freeze', id: 1 },
 			{ label: 'Unfreeze', id: 0 },
@@ -53,6 +55,13 @@ class BarcoInstance extends InstanceBase {
 			{ label: 'Green', id: '19' },
 			{ label: 'Blue', id: '20' },
 		]
+		// Notification/subscription state
+		this.notificationActive = false
+		this.notificationPort = (this.config && this.config.notification_port) ? this.config.notification_port : 3004
+		this.notificationHost = (this.config && this.config.notification_host) ? this.config.notification_host : undefined
+		this._notifyTimer = null
+		this._notifyNoEventTimer = null
+		this._lastNotificationAt = 0
 		this.setVariableDefinitions([
 			{ variableId: 'frame_IP', name: 'Frame IP Address' },
 			{ variableId: 'frame_version', name: 'Frame Version' },
@@ -141,7 +150,10 @@ class BarcoInstance extends InstanceBase {
 		console.log('Connecting to EventMaster at', this.config.host)
 		this.eventmaster = new EventMaster(this.config.host)
 		console.log('EventMaster instance created:', this.eventmaster)
-		// this.initEventmasterListener()
+		// Setup optional live notifications
+		if (this.config.enable_notifications) {
+			this.setupNotifications().catch((e) => this.log('error', `Notifications setup failed: ${e}`))
+		}
 		this.updateStatus(InstanceStatus.Ok)
 		this.getAllDataFromEventmaster().then(() => {
 			this.setActionDefinitions(this.getActions())
@@ -151,6 +163,138 @@ class BarcoInstance extends InstanceBase {
 			this.eventmasterPoller()
 		})
 		if (this.retry_interval) clearInterval(this.retry_interval)
+	}
+
+	async setupNotifications() {
+		if (!this.eventmaster) return
+		if (this.notificationActive) return
+		try {
+			const port = this.config.notification_port || this.notificationPort || 3004
+			const listenerHost = this.getNotificationHost()
+			this.log('info', `Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`)
+			if (this.config?.notifications_debug) {
+				const localIps = this.getLocalIPv4s().join(', ')
+				this.log('info', `Local IPv4 interfaces: ${localIps}`)
+				if (!this.isLikelySame24Subnet(listenerHost, this.config.host)) {
+					this.log('warning', `Listener and frame appear on different /24 subnets. Ensure routing or use an IP reachable by the frame. listener=${listenerHost}, frame=${this.config.host}`)
+				}
+			}
+			// Start local notification server
+			this.eventmaster.startNotificationServer(port, (notification) => {
+				try {
+					const n = notification?.result
+					if (!n) return
+					if (n.method === 'notification' && (n.notificationType === 'ScreenDestChanged' || n.notificationType === 'AUXDestChanged')) {
+						this._lastNotificationAt = Date.now()
+						if (this.config?.notifications_debug) {
+							let payload
+							try {
+								payload = JSON.stringify(n.change?.update ?? n)
+							} catch (_) {
+								payload = '[unserializable]'
+							}
+							if (payload && payload.length > 500) payload = payload.slice(0, 500) + '…'
+							this.log('info', `[Subscription] ${n.notificationType}${n.change?.id ? ` (id=${n.change.id})` : ''}: ${payload}`)
+						}
+						// Debounce rapid bursts
+						if (this._notifyTimer) clearTimeout(this._notifyTimer)
+						this._notifyTimer = setTimeout(() => {
+							this._lastUpdateSource = 'subscription'
+							this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify) failed: ${e}`))
+						}, 100)
+					}
+				} catch (e) {
+					this.log('error', `Notification handler error: ${e}`)
+				}
+			})
+			// Subscribe on the frame to change events
+			const frameHost = this.config.host
+			this.log('info', `Sending subscribe request: listener=${listenerHost}:${port} topics=[ScreenDestChanged,AUXDestChanged]`)
+			this.eventmaster.subscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
+				if (err) this.log('error', `Subscribe error: ${err}`)
+				else this.log('info', `Subscribed OK: frame=${frameHost} -> listener=${listenerHost}:${port}${this.config?.notifications_debug ? ` result=${JSON.stringify(result)}` : ''}`)
+			})
+			this.notificationActive = true
+			// If debug is on, warn if no events are seen shortly after subscribing
+			if (this.config?.notifications_debug) {
+				if (this._notifyNoEventTimer) clearTimeout(this._notifyNoEventTimer)
+				this._notifyNoEventTimer = setTimeout(() => {
+					if (!this._lastNotificationAt) {
+						this.log('info', `No subscription events received yet. If you expect changes, verify network reachability and firewall. listener=${listenerHost}:${port}, frame=${frameHost}`)
+					}
+				}, 10000)
+			}
+		} catch (e) {
+			this.notificationActive = false
+			throw e
+		}
+	}
+
+	isLikelySame24Subnet(a, b) {
+		try {
+			const pa = (a || '').split('.')
+			const pb = (b || '').split('.')
+			return pa.length === 4 && pb.length === 4 && pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2]
+		} catch (_) { return false }
+	}
+
+	getLocalIPv4s() {
+		const out = []
+		try {
+			const ifaces = os.networkInterfaces()
+			for (const name of Object.keys(ifaces)) {
+				for (const iface of ifaces[name] || []) {
+					if (iface.family === 'IPv4' && !iface.internal) out.push(`${name}:${iface.address}`)
+				}
+			}
+		} catch (_) {}
+		return out
+	}
+
+	async teardownNotifications() {
+		if (!this.eventmaster) return
+		if (!this.notificationActive) return
+		try {
+			const port = this.config.notification_port || this.notificationPort || 3004
+			const listenerHost = this.getNotificationHost()
+			// Best-effort unsubscribe
+			await new Promise((resolve) => {
+				try {
+					this.eventmaster.unsubscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], () => resolve())
+				} catch (e) {
+					resolve()
+				}
+			})
+			this.notificationActive = false
+			if (this._notifyTimer) {
+				clearTimeout(this._notifyTimer)
+				this._notifyTimer = null
+			}
+			if (this._notifyNoEventTimer) {
+				clearTimeout(this._notifyNoEventTimer)
+				this._notifyNoEventTimer = null
+			}
+		} catch (e) {
+			// ignore teardown errors
+		}
+	}
+
+	getNotificationHost() {
+		if (this.notificationHost) return this.notificationHost
+		if (this.config?.notification_host) return this.config.notification_host
+		// Auto-detect a likely local IPv4 address
+		try {
+			const ifaces = os.networkInterfaces()
+			for (const name of Object.keys(ifaces)) {
+				for (const iface of ifaces[name] || []) {
+					if (iface.family === 'IPv4' && !iface.internal) {
+						return iface.address
+					}
+				}
+			}
+		} catch (_) {}
+		// Fallback to localhost
+		return '127.0.0.1'
 	}
 
 	async getFrameSettings() {
@@ -254,11 +398,23 @@ class BarcoInstance extends InstanceBase {
 					// Store frame variable definitions for use by updateDestinationVariables
 					this.frameVariableDefinitions = variableDefinitions
 					
-					// Update variable definitions dynamically
-					this.setVariableDefinitions(variableDefinitions)
+					// Delegate variable definition updates to the centralized updater
+					// This avoids redefining on every poll and ensures values are repopulated correctly
+					this.updateDestinationVariables()
 					
-					// Set all variable values
-					this.setVariableValues(variableValues)
+					// Set all variable values with change tracking
+					const changedFrameVariables = {}
+					Object.entries(variableValues).forEach(([key, value]) => {
+						if (this.previousVariableValues[key] !== value) {
+							changedFrameVariables[key] = value
+							this.previousVariableValues[key] = value
+						}
+					})
+					
+					if (Object.keys(changedFrameVariables).length > 0) {
+						this.setVariableValues(changedFrameVariables)
+						this.log('debug', `Updated ${Object.keys(changedFrameVariables).length} frame variables`)
+					}
 					
 					// this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
 					// if (frameData.Slot) {
@@ -269,12 +425,24 @@ class BarcoInstance extends InstanceBase {
 				}
 			} catch (err) {
 				this.log('error', 'EventMaster Frame Settings Error: ' + err)
-				// Set fallback values
-				this.setVariableValues({
+				// Set fallback values with change tracking
+				const fallbackVariables = {
 					frame_IP: this.config.host || 'Unknown',
 					frame_version: 'Error fetching',
 					frame_OSVersion: 'Error fetching',
+				}
+				
+				const changedFallbackVariables = {}
+				Object.entries(fallbackVariables).forEach(([key, value]) => {
+					if (this.previousVariableValues[key] !== value) {
+						changedFallbackVariables[key] = value
+						this.previousVariableValues[key] = value
+					}
 				})
+				
+				if (Object.keys(changedFallbackVariables).length > 0) {
+					this.setVariableValues(changedFallbackVariables)
+				}
 			}
 		}
 	}
@@ -286,6 +454,7 @@ class BarcoInstance extends InstanceBase {
 			} else {
 				this.polling_interval = setInterval(
 					() => {
+						this._lastUpdateSource = 'poll'
 						this.getAllDataFromEventmaster().then(() => {
 							this.setActionDefinitions(this.getActions())
 							this.setFeedbackDefinitions(this.getFeedbacks())
@@ -324,6 +493,37 @@ class BarcoInstance extends InstanceBase {
 				default: 15,
 			},
 			{
+				type: 'checkbox',
+				id: 'enable_notifications',
+				label: 'Enable live updates (EventMaster subscriptions)',
+				width: 6,
+				default: false,
+			},
+			{
+				type: 'checkbox',
+				id: 'notifications_debug',
+				label: 'Verbose subscription debug logging',
+				width: 6,
+				default: false,
+				isVisible: (config) => !!config.enable_notifications,
+			},
+			{
+				type: 'number',
+				id: 'notification_port',
+				label: 'Notification server port default 3004 (local)',
+				width: 6,
+				default: 3004,
+				isVisible: (config) => !!config.enable_notifications,
+			},
+			{
+				type: 'textinput',
+				id: 'notification_host',
+				label: 'Notification server host (your local IP, optional)',
+				width: 6,
+				placeholder: 'Auto-detect local IP if empty',
+				isVisible: (config) => !!config.enable_notifications,
+			},
+			{
 				type: 'dropdown',
 				id: 'auth_mode',
 				label: 'Authentication Mode',
@@ -355,6 +555,12 @@ class BarcoInstance extends InstanceBase {
 	async destroy() {
 		if (this.retry_interval) clearInterval(this.retry_interval)
 		if (this.polling_interval) clearInterval(this.polling_interval)
+		// Teardown notifications if active
+		try {
+			await this.teardownNotifications()
+		} catch (e) {
+			// ignore
+		}
 		delete this.eventmaster
 		this.log(`debug`, 'destroy')
 	}
@@ -378,6 +584,7 @@ class BarcoInstance extends InstanceBase {
 	getActualSourceId = (dropdownIndex) => {
 		const sources = Object.values(this.eventmasterData.sources)
 		if (dropdownIndex >= 0 && dropdownIndex < sources.length) {
+			// valid index; proceed to resolve actual source id
 			const selectedSource = sources[dropdownIndex]
 			this.log('debug', `Source lookup: dropdown index ${dropdownIndex} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`)
 			
@@ -519,10 +726,24 @@ class BarcoInstance extends InstanceBase {
 					})
 				})
 				const key = Object.keys(res.response)[0]
-				this.setVariableValues({
+				const powerVariables = {
 					power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
 					power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
+				}
+				
+				// Apply change tracking for power status variables
+				const changedPowerVariables = {}
+				Object.entries(powerVariables).forEach(([key, value]) => {
+					if (this.previousVariableValues[key] !== value) {
+						changedPowerVariables[key] = value
+						this.previousVariableValues[key] = value
+					}
 				})
+				
+				if (Object.keys(changedPowerVariables).length > 0) {
+					this.setVariableValues(changedPowerVariables)
+					this.log('debug', `Updated ${Object.keys(changedPowerVariables).length} power variables`)
+				}
 			} catch (err) {
 				this.log('error', 'EventMaster Power Status Error: ' + err)
 			}
@@ -614,10 +835,16 @@ class BarcoInstance extends InstanceBase {
 			})
 		}
 
-		this.setVariableDefinitions(variables)
-		
-		// Clear variable tracking since setVariableDefinitions resets all values
-		this.previousVariableValues = {}
+		// Only update variable definitions if they've changed
+		const variableDefinitionsHash = JSON.stringify(variables)
+		if (this.lastVariableDefinitionsHash !== variableDefinitionsHash) {
+			this.log('debug', 'Variable definitions changed, updating...')
+			this.setVariableDefinitions(variables)
+			
+			// Clear variable tracking only when definitions actually change
+			this.previousVariableValues = {}
+			this.lastVariableDefinitionsHash = variableDefinitionsHash
+		}
 		
 		// Auto-populate source monitoring variables
 		this.autoPopulateSourceMonitoring()
@@ -628,7 +855,9 @@ class BarcoInstance extends InstanceBase {
 	 * Shows which destinations each source is active on
 	 */
 	async autoPopulateSourceMonitoring() {
-		// this.log('debug', 'Starting source monitoring auto-population...')
+		if (this.config?.notifications_debug) {
+			this.log('debug', `Starting source monitoring auto-population (trigger=${this._lastUpdateSource || 'poll'})`)
+		}
 		
 		// Check if EventMaster is connected
 		if (!this.eventmaster) {
