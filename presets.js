@@ -1386,7 +1386,7 @@ module.exports = function getPresets(eventmasterData, log) {
 			
 			presets[`source_${sourceNumber}_feedback`] = {
 				type: 'button',
-				category: 'Sources Feedback',
+				category: 'Sources Feedback (simple)',
 				name: `$(eventmaster:source_${sourceNumber}_name)`,
 				style: {
 					text: `$(eventmaster:source_${sourceNumber}_name)`,
@@ -1419,6 +1419,50 @@ module.exports = function getPresets(eventmasterData, log) {
 						},
 						style: {
 							bgcolor: combineRgb(255, 0, 0), // Red when active
+						},
+					},
+				],
+			}
+
+			presets[`source_${sourceNumber}_feedback_advanced`] = {
+				type: 'button',
+				category: 'Sources Feedback (advanced)',
+				name: `$(eventmaster:source_${sourceNumber}_name)`,
+				style: {
+					text: `$(eventmaster:source_${sourceNumber}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(64, 64, 64), // Default gray
+				},
+				steps: [
+					{
+						down: [], // No action when pressed
+						up: [],
+					},
+				],
+				feedbacks: [
+					{
+						feedbackId: 'source_active_on_destinations',
+						options: {
+							source: sourceNumber,
+							tallyState: 'pvw', // Only indicate PVW status
+							destinations: ['anywhere'] // All destinations
+						},
+						style: {
+							bgcolor: combineRgb(0, 255, 0), // Green when active
+							color: combineRgb(0, 0, 0), // Black text for contrast
+						},
+					},
+					{
+						feedbackId: 'source_active_on_destinations',
+						options: {
+							source: sourceNumber,
+							tallyState: 'pgm', // Only indicate PGM status
+							destinations: ['anywhere'] // All destinations
+						},
+						style: {
+							bgcolor: combineRgb(255, 0, 0), // Red when active
+							color: combineRgb(255, 255, 255), // White text for contrast
 						},
 					},
 				],
