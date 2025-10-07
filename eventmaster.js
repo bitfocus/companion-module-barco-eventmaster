@@ -111,46 +111,9 @@ class BarcoInstance extends InstanceBase {
 		}
 	}
 
-	// initEventmasterListener() {
-		
-	// 	// Start server to receive notifications
-	// 	this.eventmaster.startNotificationServer(3004, (notification) => {
-	// 		if(notification.result.method === 'notification' && notification.result.notificationType === 'ScreenDestChanged') {
-	// 			const update = JSON.stringify(notification.result.change.update)
-	// 			// this.log('info', `Screen Destination Changed: ${update}`)
-	// 		}
-	// 	})
-		
-	// 	this.eventmaster.listContent({id: 1 }, (err, res) => {
-	// 		if (err) {
-	// 			this.log('error', 'EventMaster Error: ' + err)
-	// 		} else {
-	// 			this.log('info', `Screen Destination Changed result: ${JSON.stringify(res)}`)
-	// 		}
-	// 	})
-
-	// 	// Subscribe to notifications
-	// 	this.eventmaster.unsubscribe("172.16.25.235", 3004, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
-	// 		if (err) {
-	// 			console.error('Subscribe error:', err)
-	// 		} else {
-	// 			console.log('Subscribed:', result)
-	// 		}
-	// 	})
-	// 	// Subscribe to notifications
-	// 	this.eventmaster.subscribe("172.16.25.235", 3004, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
-	// 		if (err) {
-	// 			console.error('Subscribe error:', err)
-	// 		} else {
-	// 			console.log('Subscribed:', result)
-	// 		}
-	// 	})
-	// }
-
 	initEventmaster() {
 		console.log('Connecting to EventMaster at', this.config.host)
 		this.eventmaster = new EventMaster(this.config.host)
-		console.log('EventMaster instance created:', this.eventmaster)
 		// Setup optional live notifications
 		if (this.config.enable_notifications) {
 			this.setupNotifications().catch((e) => this.log('error', `Notifications setup failed: ${e}`))
@@ -851,7 +814,6 @@ class BarcoInstance extends InstanceBase {
 			
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
-					this.log('info', `[Screen Debug] Querying screen destination ${dest.id} (${dest.Name})...`)
 					
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
@@ -2670,24 +2632,16 @@ class BarcoInstance extends InstanceBase {
 						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
 						   const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `${screenId}`
 						   
-						   // Debug logging to see what we're comparing
-						   this.log('info', `[Screen Debug] Checking screen_${screenId} (${screenName}), mode=${mode}, tallyState=${tallyState}`)
-						   this.log('info', `[Screen Debug] PGM destinations: ${JSON.stringify(pgmDestinations)}`)
-						   this.log('info', `[Screen Debug] PVW destinations: ${JSON.stringify(pvwDestinations)}`)
-						   this.log('info', `[Screen Debug] Looking for: "Screen ${screenName}" or starting with "Screen ${screenName} L"`)
-						   
 						   if (mode === 'pgm' && tallyState === 'pgm') {
 							   // Check for exact screen name match and also check for layer matches (e.g., "Screen LED MAIN L1")
 							   const hasScreenMatch = pgmDestinations.some(pgmDest => 
 								   pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`)
 							   )
-							   this.log('info', `[Screen Debug] PGM match result: ${hasScreenMatch}`)
 							   if (hasScreenMatch) return true
 						   } else if (mode === 'pvw' && tallyState === 'pvw') {
 							   const hasScreenMatch = pvwDestinations.some(pvwDest => 
 								   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
 							   )
-							   this.log('info', `[Screen Debug] PVW match result: ${hasScreenMatch}`)
 							   if (hasScreenMatch) return true
 						   } else if (!mode) {
 							   // No specific mode - check both PGM and PVW
@@ -2698,7 +2652,6 @@ class BarcoInstance extends InstanceBase {
 								   (tallyState === 'pvw' && pvwDestinations.some(pvwDest => 
 									   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
 								   ))
-							   this.log('info', `[Screen Debug] Combined match result: ${hasScreenMatch}`)
 							   if (hasScreenMatch) return true
 						   }
 					   } else if (dest.startsWith('aux_')) {
