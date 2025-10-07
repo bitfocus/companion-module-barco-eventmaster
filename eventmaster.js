@@ -186,46 +186,11 @@ class BarcoInstance extends InstanceBase {
 			this._notificationListener = new NotificationListener(this.config.host, listenerHost, port, events, debounceMs)
 			this._notificationListener.onPull = async ({ reason, snapshot, counts }) => {
 				this._lastNotificationAt = Date.now()
-				if (this.config?.notifications_debug) {
-					this.log('info', `[Subscription] Debounced pull: reason=${reason}, counts=${JSON.stringify(counts)}, snapshot=${JSON.stringify(snapshot)}`)
-				}
 				// Only fetch content for changed screens/auxes
 				try {
-					const screenIds = new Set([
-						...snapshot.ScreenDestChanged.update,
-						...snapshot.ScreenDestChanged.add,
-						...snapshot.ScreenDestChanged.remove,
-					])
-					const auxIds = new Set([
-						...snapshot.AUXDestChanged.update,
-						...snapshot.AUXDestChanged.add,
-						...snapshot.AUXDestChanged.remove,
-					])
-					// Fetch and update only affected screens
-					for (const id of screenIds) {
-						await new Promise((resolve) => {
-							this.eventmaster.listContent({ id }, (err, res) => {
-								if (err) this.log('error', `listContent(${id}) error: ${err}`)
-								else this.log('info', `Screen ${id} content: ${JSON.stringify(res)}`)
-								// Optionally update tally/feedback here
-								resolve()
-							})
-						})
-					}
-					// Fetch and update only affected auxes
-					for (const id of auxIds) {
-						await new Promise((resolve) => {
-							this.eventmaster.listAuxContent({ id }, (err, res) => {
-								if (err) this.log('error', `listAuxContent(${id}) error: ${err}`)
-								else this.log('info', `AUX ${id} content: ${JSON.stringify(res)}`)
-								// Optionally update tally/feedback here
-								resolve()
-							})
-						})
-					}
-					// After partial update, update tally/feedback
-					this._lastUpdateSource = 'subscription'
-					this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify) failed: ${e}`))
+					// Always query all screens and auxes after any notification to ensure state is complete
+					this._lastUpdateSource = 'subscription-notify'
+					await this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify, full) failed: ${e}`))
 				} catch (e) {
 					this.log('error', `Notification pull handler error: ${e}`)
 				}
@@ -430,7 +395,6 @@ class BarcoInstance extends InstanceBase {
 					
 					if (Object.keys(changedFrameVariables).length > 0) {
 						this.setVariableValues(changedFrameVariables)
-						this.log('debug', `Updated ${Object.keys(changedFrameVariables).length} frame variables`)
 					}
 					
 					// this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
@@ -759,7 +723,6 @@ class BarcoInstance extends InstanceBase {
 				
 				if (Object.keys(changedPowerVariables).length > 0) {
 					this.setVariableValues(changedPowerVariables)
-					this.log('debug', `Updated ${Object.keys(changedPowerVariables).length} power variables`)
 				}
 			} catch (err) {
 				this.log('error', 'EventMaster Power Status Error: ' + err)
@@ -887,17 +850,17 @@ class BarcoInstance extends InstanceBase {
 			this.previousVariableValues = {}
 		}
 		
-		// Initialize source tracking objects
+
+
+		// Initialize source tracking objects and clear any previous data
 		const sourcePgmDestinations = {}
 		const sourcePvwDestinations = {}
-		
-		// Initialize all sources with empty arrays
+		// Always clear all previous destination arrays for all known sources
 		if (this.eventmasterData && this.eventmasterData.sources) {
 			Object.values(this.eventmasterData.sources).forEach(source => {
 				sourcePgmDestinations[source.id] = []
 				sourcePvwDestinations[source.id] = []
 			})
-			// this.log('debug', `Initialized tracking for ${Object.keys(sourcePgmDestinations).length} sources`)
 		} else {
 			this.log('warning', 'No sources available for monitoring')
 			return
@@ -920,8 +883,6 @@ class BarcoInstance extends InstanceBase {
 					
 					if (res && res.response) {
 						const content = res.response
-						// Removed excessive debug logging for cleaner output
-						
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
 							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
@@ -931,7 +892,6 @@ class BarcoInstance extends InstanceBase {
 								const sourceId = pgmBgLayer.LastBGSourceIndex
 								if (sourcePgmDestinations[sourceId]) {
 									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
-									// this.log('debug', `Screen ${dest.Name}: PGM background = Source ${sourceId + 1}`)
 								}
 							}
 							
@@ -941,15 +901,12 @@ class BarcoInstance extends InstanceBase {
 								const sourceId = pvwBgLayer.LastBGSourceIndex
 								if (sourcePvwDestinations[sourceId]) {
 									sourcePvwDestinations[sourceId].push(`Screen ${dest.Name}`)
-									// this.log('debug', `Screen ${dest.Name}: PVW background = Source ${sourceId + 1}`)
 								}
 							}
 						}
 						
 						// Check active layers
 						if (content.Layers && content.Layers.length > 0) {
-							// this.log('debug', `Screen ${dest.id} has ${content.Layers.length} layers`)
-							
 							content.Layers.forEach(layer => {
 								// Check if layer is on PGM
 								if (layer.PgmMode !== undefined && layer.PgmMode > 0 && 
@@ -959,7 +916,6 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PGM = Source ${sourceId + 1}`)
 									}
 								}
 								
@@ -971,7 +927,6 @@ class BarcoInstance extends InstanceBase {
 									const sourceId = layer.SrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-										// this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: ACTIVE PVW = Source ${sourceId + 1}`)
 									}
 								}
 								
@@ -1042,11 +997,19 @@ class BarcoInstance extends InstanceBase {
 		
 		   if (this.eventmasterData && this.eventmasterData.sources) {
 			   Object.values(this.eventmasterData.sources).forEach(source => {
-				   const pgmDests = sourcePgmDestinations[source.id] || []
-				   const pvwDests = sourcePvwDestinations[source.id] || []
-				   const isActive = pgmDests.length > 0 || pvwDests.length > 0
-
-				   // Calculate new values
+				   const pgmDestsRaw = sourcePgmDestinations[source.id] || []
+				   const pvwDestsRaw = sourcePvwDestinations[source.id] || []
+				   const pgmDests = pgmDestsRaw.filter(dest => dest && !dest.includes('background'))
+				   const pvwDests = pvwDestsRaw.filter(dest => dest && !dest.includes('background'))
+				   let feedbackColor = undefined
+				   if (pgmDests.length > 0) {
+					   feedbackColor = 'red'
+				   } else if (pvwDests.length > 0) {
+					   feedbackColor = 'green'
+				   } else {
+					   feedbackColor = undefined
+				   }
+				   const isActive = (pgmDests.length > 0 || pvwDests.length > 0)
 				   const newValues = {
 					   [`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
 					   [`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 
@@ -1056,18 +1019,8 @@ class BarcoInstance extends InstanceBase {
 						   ? pvwDests.join(', ') 
 						   : 'Not active on PVW',
 					   [`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No',
+					   [`source_${source.id + 1}_tally`]: feedbackColor
 				   }
-
-				   // Tally feedback color: red for program, green for preview, yellow for both
-				   let feedbackColor = undefined
-				   if (pgmDests.length > 0 && pvwDests.length > 0) {
-					   feedbackColor = 'yellow' // Both
-				   } else if (pgmDests.length > 0) {
-					   feedbackColor = 'red' // Program
-				   } else if (pvwDests.length > 0) {
-					   feedbackColor = 'green' // Preview
-				   }
-				   newValues[`source_${source.id + 1}_tally`] = feedbackColor
 
 				   // Check for changes and only add changed variables
 				   Object.entries(newValues).forEach(([key, value]) => {
@@ -1138,7 +1091,11 @@ class BarcoInstance extends InstanceBase {
 		// Update feedbacks to reflect current source activity
 		this.checkFeedbacks()
 		
-		this.log('info', `Source monitoring updated: ${activeSources} sources have active destinations`)
+		// Only log if there are actually active sources or it's been a while
+		if (activeSources > 0 || !this._lastLogTime || (Date.now() - this._lastLogTime) > 60000) {
+			this.log('debug', `Source monitoring updated: ${activeSources} sources have active destinations`)
+			this._lastLogTime = Date.now()
+		}
 	}
 
 	/**
@@ -1505,14 +1462,6 @@ class BarcoInstance extends InstanceBase {
 				// Add test pattern if selected
 				if (action.options.testPattern && action.options.testPattern !== '') {
 					params.TestPattern = parseInt(action.options.testPattern)
-				}
-
-				this.log('debug', `changeAuxContent params: ${JSON.stringify(params)}`)
-				
-				// Debug: log available source indices
-				if (this.eventmasterData && this.eventmasterData.sources) {
-					const sourceIds = Object.values(this.eventmasterData.sources).map(s => s.id)
-					this.log('debug', `Available source indices: ${JSON.stringify(sourceIds)}`)
 				}
 
 				this.eventmaster.changeAuxContent(params, (err, res) => {
@@ -2723,49 +2672,40 @@ class BarcoInstance extends InstanceBase {
 				const tallyState = feedback.options.tallyState || 'pgm'
 
 				// Get the source monitoring variables
-				const pgmDestinations = this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || ''
-				const pvwDestinations = this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || ''
+				   const pgmDestinations = (this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || '').split(',').map(s => s.trim()).filter(Boolean)
+				   const pvwDestinations = (this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || '').split(',').map(s => s.trim()).filter(Boolean)
 
-				// Helper to check if source is active on selected destinations
-				let isActive = false
-				for (const dest of destinations) {
-					if (dest === 'anywhere') {
-						isActive = (tallyState === 'pgm' && pgmDestinations && pgmDestinations !== 'Not active on PGM')
-							|| (tallyState === 'pvw' && pvwDestinations && pvwDestinations !== 'Not active on PVW')
-						if (isActive) return true
-					} else if (dest === 'anywhere_pgm') {
-						if (tallyState === 'pgm') {
-							if (pgmDestinations && pgmDestinations !== 'Not active on PGM') return true
-						}
-					} else if (dest === 'anywhere_pvw') {
-						if (tallyState === 'pvw') {
-							if (pvwDestinations && pvwDestinations !== 'Not active on PVW') return true
-						}
-					} else if (dest.startsWith('screen_')) {
-						const parts = dest.split('_')
-						const screenId = parts[1]
-						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						if ((mode === 'pgm' && tallyState === 'pgm') || (tallyState === 'pgm' && !mode)) {
-							if (pgmDestinations.includes(`Screen `) && pgmDestinations.includes(`${screenId}`)) return true
-						} else if ((mode === 'pvw' && tallyState === 'pvw') || (tallyState === 'pvw' && !mode)) {
-							if (pvwDestinations.includes(`Screen `) && pvwDestinations.includes(`${screenId}`)) return true
-						}
-					} else if (dest.startsWith('aux_')) {
-						const parts = dest.split('_')
-						const auxId = parts[1]
-						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						// Find the AUX name
-						const aux = this.eventmasterData?.AuxDestinations ? 
-							Object.values(this.eventmasterData.AuxDestinations).find(a => a.id == auxId) : null
-						const auxName = aux ? aux.Name : `AUX ${auxId}`
-						if (mode === 'pgm' && tallyState === 'pgm') {
-							if (pgmDestinations.includes(`AUX ${auxName}`)) return true
-						} else if (mode === 'pvw' && tallyState === 'pvw') {
-							if (pvwDestinations.includes(`AUX ${auxName}`)) return true
-						}
-					}
-				}
-				return false
+				   for (const dest of destinations) {
+					   if (dest === 'anywhere') {
+						   if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM') return true
+						   if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW') return true
+					   } else if (dest === 'anywhere_pgm') {
+						   if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM') return true
+					   } else if (dest === 'anywhere_pvw') {
+						   if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW') return true
+					   } else if (dest.startsWith('screen_')) {
+						   const parts = dest.split('_')
+						   const screenId = parts[1]
+						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						   const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `Screen ${screenId}`
+						   if ((mode === 'pgm' && tallyState === 'pgm') || (tallyState === 'pgm' && !mode)) {
+							   if (pgmDestinations.includes(screenName)) return true
+						   } else if ((mode === 'pvw' && tallyState === 'pvw') || (tallyState === 'pvw' && !mode)) {
+							   if (pvwDestinations.includes(screenName)) return true
+						   }
+					   } else if (dest.startsWith('aux_')) {
+						   const parts = dest.split('_')
+						   const auxId = parts[1]
+						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						   const auxName = this.eventmasterData?.AuxDestinations?.[auxId]?.Name || `AUX ${auxId}`
+						   if (mode === 'pgm' && tallyState === 'pgm') {
+							   if (pgmDestinations.includes(auxName)) return true
+						   } else if (mode === 'pvw' && tallyState === 'pvw') {
+							   if (pvwDestinations.includes(auxName)) return true
+						   }
+					   }
+				   }
+				   return false
 			}
 		}
 
