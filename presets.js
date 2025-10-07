@@ -1405,6 +1405,17 @@ module.exports = function getPresets(eventmasterData, log) {
 						feedbackId: 'source_active_simple',
 						options: {
 							source: sourceNumber,
+							tallyState: 'pvw' // Only indicate PVW status
+						},
+						style: {
+							bgcolor: combineRgb(0, 255, 0), // Green when active
+						},
+					},
+					{
+						feedbackId: 'source_active_simple',
+						options: {
+							source: sourceNumber,
+							tallyState: 'pgm' // Only indicate PGM status
 						},
 						style: {
 							bgcolor: combineRgb(255, 0, 0), // Red when active
