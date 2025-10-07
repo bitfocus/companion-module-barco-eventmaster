@@ -1069,11 +1069,7 @@ class BarcoInstance extends InstanceBase {
 			const sourceType = (source.InputCfgIndex !== undefined && source.InputCfgIndex >= 0) ? 'Input' : 'Still'
 			return {
 				label: `${source.Name} (${sourceType})`,
-				id: index, // Use array index as dropdown ID (0, 1, 2, 3...)
-				actualSourceId: source.id, // Keep the real EventMaster source ID for API calls
-				InputCfgIndex: source.InputCfgIndex,
-				SrcType: source.SrcType,
-				StillIndex: source.StillIndex,
+				id: source.id, // Use the actual EventMaster source ID directly
 			}
 		})
 		const CHOICES_CUES = Object.values(this.eventmasterData.cues).map((cue) => ({
@@ -1275,12 +1271,12 @@ class BarcoInstance extends InstanceBase {
 					id: 'frzSource',
 					minChoicesForSearch: 5,
 					choices: CHOICES_SOURCES,
-					default: '0',
+					default: CHOICES_SOURCES.length > 0 ? CHOICES_SOURCES[0].id : 0,
 				},
 			],
 			callback: (action) => {
-				const dropdownIndex = parseInt(action.options.frzSource)
-				const sourceId = this.getActualSourceId(dropdownIndex)
+				// Use the selected source ID directly (it's now the actual EventMaster source ID)
+				const sourceId = parseInt(action.options.frzSource)
 				
 				const params = {
 					type: 0, // 0 type is source
