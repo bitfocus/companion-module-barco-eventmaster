@@ -179,13 +179,6 @@ class BarcoInstance extends InstanceBase {
 			const port = this.config.notification_port || this.notificationPort || 3000
 			const listenerHost = this.getNotificationHost()
 			this.log('info', `Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`)
-			if (this.config?.notifications_debug) {
-				const localIps = this.getLocalIPv4s().join(', ')
-				this.log('info', `Local IPv4 interfaces: ${localIps}`)
-				if (!this.isLikelySame24Subnet(listenerHost, this.config.host)) {
-					this.log('warning', `Listener and frame appear on different /24 subnets. Ensure routing or use an IP reachable by the frame. listener=${listenerHost}, frame=${this.config.host}`)
-				}
-			}
 			// Use NotificationListener utility for batching and debounce
 			const events = ['ScreenDestChanged', 'AUXDestChanged']
 			const debounceMs = 200 // Fast feedback, but still debounced
@@ -203,15 +196,6 @@ class BarcoInstance extends InstanceBase {
 			}
 			this._notificationListener.start()
 			this.notificationActive = true
-			// If debug is on, warn if no events are seen shortly after subscribing
-			if (this.config?.notifications_debug) {
-				if (this._notifyNoEventTimer) clearTimeout(this._notifyNoEventTimer)
-				this._notifyNoEventTimer = setTimeout(() => {
-					if (!this._lastNotificationAt) {
-						this.log('info', `No subscription events received yet. If you expect changes, verify network reachability and firewall. listener=${listenerHost}:${port}, frame=${this.config.host}`)
-					}
-				}, 10000)
-			}
 		} catch (e) {
 			this.notificationActive = false
 			throw e
@@ -486,14 +470,7 @@ class BarcoInstance extends InstanceBase {
 				width: 6,
 				default: false,
 			},
-			{
-				type: 'checkbox',
-				id: 'notifications_debug',
-				label: 'Verbose subscription debug logging',
-				width: 6,
-				default: false,
-				isVisible: (config) => !!config.enable_notifications,
-			},
+
 			   {
 				   type: 'number',
 				   id: 'notification_port',
@@ -505,7 +482,7 @@ class BarcoInstance extends InstanceBase {
 			{
 				type: 'textinput',
 				id: 'notification_host',
-				label: 'Notification server host (your local IP, optional)',
+				label: 'Notification server host (your local IP address)',
 				width: 6,
 				placeholder: 'Auto-detect local IP if empty',
 				isVisible: (config) => !!config.enable_notifications,
@@ -841,10 +818,6 @@ class BarcoInstance extends InstanceBase {
 	 * Shows which destinations each source is active on
 	 */
 	async autoPopulateSourceMonitoring() {
-		if (this.config?.notifications_debug) {
-			this.log('debug', `Starting source monitoring auto-population (trigger=${this._lastUpdateSource || 'poll'})`)
-		}
-		
 		// Check if EventMaster is connected
 		if (!this.eventmaster) {
 			this.log('warning', 'EventMaster not connected, skipping source monitoring')
