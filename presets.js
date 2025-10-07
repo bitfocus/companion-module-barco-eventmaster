@@ -1102,9 +1102,9 @@ module.exports = function getPresets(eventmasterData, log) {
 				presets[`aux_${auxId}_pgm_source_${sourceNumber}`] = {
 					type: 'button',
 					category: `AUX ${auxName} - PGM Sources`,
-					name: `$(eventmaster:source_${sourceNumber}_name)`,
+					name: `${auxName}$(eventmaster:source_${sourceNumber}_name)`,
 					style: {
-						text: `$(eventmaster:source_${sourceNumber}_name)`,
+						text: `${auxName} $(eventmaster:source_${sourceNumber}_name)`,
 						size: '14',
 						color: combineRgb(255, 255, 255),
 						bgcolor: combineRgb(0, 0, 0),
@@ -1116,7 +1116,7 @@ module.exports = function getPresets(eventmasterData, log) {
 									actionId: 'change_aux_content',
 									options: {
 										auxDestination: auxId,
-										pgmSource: sourceId + 1000, // Use offset ID for dropdown
+										pgmSource: sourceId, // Use offset ID for dropdown
 										pvwSource: '', // No change to PVW
 										testPattern: '', // No test pattern
 										auxName: '', // Don't change name
@@ -1131,7 +1131,8 @@ module.exports = function getPresets(eventmasterData, log) {
 							feedbackId: 'source_active_on_destinations',
 							options: {
 								source: sourceNumber,
-								destinations: [`aux_${auxId}_pgm`]
+								destinations: [`aux_${auxId}_pgm`],
+								tallyState: 'pgm' // Only highlight for PGM state
 							},
 							style: {
 								bgcolor: combineRgb(255, 0, 0), // Red when active on this AUX PGM
@@ -1141,48 +1142,49 @@ module.exports = function getPresets(eventmasterData, log) {
 					],
 				}
 
-				// Preset for setting this source to AUX PVW
-				presets[`aux_${auxId}_pvw_source_${sourceNumber}`] = {
-					type: 'button',
-					category: `AUX ${auxName} - PVW Sources`,
-					name: `$(eventmaster:source_${sourceNumber}_name)`,
-					style: {
-						text: `$(eventmaster:source_${sourceNumber}_name)`,
-						size: '14',
-						color: combineRgb(255, 255, 255),
-						bgcolor: combineRgb(0, 102, 0), // Dark green for PVW
-					},
-					steps: [
-						{
-							down: [
-								{
-									actionId: 'change_aux_content',
-									options: {
-										auxDestination: auxId,
-										pgmSource: '', // No change to PGM
-										pvwSource: sourceId + 1000, // Use offset ID for dropdown
-										testPattern: '', // No test pattern
-										auxName: '', // Don't change name
-									},
-								},
-							],
-							up: [],
-						},
-					],
-					feedbacks: [
-						{
-							feedbackId: 'source_active_on_destinations',
-							options: {
-								source: sourceNumber,
-								destinations: [`aux_${auxId}_pvw`]
-							},
-							style: {
-								bgcolor: combineRgb(0, 255, 0), // Green when active on this AUX PVW
-								color: combineRgb(0, 0, 0), // Black text for contrast
-							},
-						},
-					],
-				}
+				// // Preset for setting this source to AUX PVW
+				// presets[`aux_${auxId}_pvw_source_${sourceNumber}`] = {
+				// 	type: 'button',
+				// 	category: `AUX ${auxName} - PVW Sources`,
+				// 	name: `${auxName}$(eventmaster:source_${sourceNumber}_name)`,
+				// 	style: {
+				// 		text: `${auxName} $(eventmaster:source_${sourceNumber}_name)`,
+				// 		size: '14',
+				// 		color: combineRgb(255, 255, 255),
+				// 		bgcolor: combineRgb(0, 102, 0), // Dark green for PVW
+				// 	},
+				// 	steps: [
+				// 		{
+				// 			down: [
+				// 				{
+				// 					actionId: 'change_aux_content',
+				// 					options: {
+				// 						auxDestination: auxId,
+				// 						pgmSource: '', // No change to PGM
+				// 						pvwSource: sourceId + 1000, // Use offset ID for dropdown
+				// 						testPattern: '', // No test pattern
+				// 						auxName: '', // Don't change name
+				// 					},
+				// 				},
+				// 			],
+				// 			up: [],
+				// 		},
+				// 	],
+				// 	feedbacks: [
+				// 		{
+				// 			feedbackId: 'source_active_on_destinations',
+				// 			options: {
+				// 				source: sourceNumber,
+				// 				destinations: [`aux_${auxId}_pvw`],
+				// 				tallyState: 'pvw' // Only highlight for PVW state
+				// 			},
+				// 			style: {
+				// 				bgcolor: combineRgb(0, 255, 0), // Green when active on this AUX PVW
+				// 				color: combineRgb(0, 0, 0), // Black text for contrast
+				// 			},
+				// 		},
+				// 	],
+				// }
 			})
 
 			// Add a "Clear" preset for each AUX destination
@@ -1216,35 +1218,35 @@ module.exports = function getPresets(eventmasterData, log) {
 				feedbacks: [],
 			}
 
-			presets[`aux_${auxId}_clear_pvw`] = {
-				type: 'button',
-				category: `AUX ${auxName} - PVW Sources`,
-				name: 'Clear PVW',
-				style: {
-					text: 'Clear\\nPVW',
-					size: '14',
-					color: combineRgb(255, 255, 255),
-					bgcolor: combineRgb(100, 100, 100), // Dark gray
-				},
-				steps: [
-					{
-						down: [
-							{
-								actionId: 'change_aux_content',
-								options: {
-									auxDestination: auxId,
-									pgmSource: '', // No change to PGM
-									pvwSource: -1, // Clear source (set to -1)
-									testPattern: '', // No test pattern
-									auxName: '', // Don't change name
-								},
-							},
-						],
-						up: [],
-					},
-				],
-				feedbacks: [],
-			}
+			// presets[`aux_${auxId}_clear_pvw`] = {
+			// 	type: 'button',
+			// 	category: `AUX ${auxName} - PVW Sources`,
+			// 	name: 'Clear PVW',
+			// 	style: {
+			// 		text: 'Clear\\nPVW',
+			// 		size: '14',
+			// 		color: combineRgb(255, 255, 255),
+			// 		bgcolor: combineRgb(100, 100, 100), // Dark gray
+			// 	},
+			// 	steps: [
+			// 		{
+			// 			down: [
+			// 				{
+			// 					actionId: 'change_aux_content',
+			// 					options: {
+			// 						auxDestination: auxId,
+			// 						pgmSource: '', // No change to PGM
+			// 						pvwSource: -1, // Clear source (set to -1)
+			// 						testPattern: '', // No test pattern
+			// 						auxName: '', // Don't change name
+			// 					},
+			// 				},
+			// 			],
+			// 			up: [],
+			// 		},
+			// 	],
+			// 	feedbacks: [],
+			// }
 		})
 	}
 
