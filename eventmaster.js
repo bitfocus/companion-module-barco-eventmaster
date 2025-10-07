@@ -1,4 +1,5 @@
 const EventMaster = require('barco-eventmaster')
+const NotificationListener = require('./tools/notification-listener')
 const os = require('os')
 const { InstanceBase, InstanceStatus, Regex, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
@@ -179,48 +180,64 @@ class BarcoInstance extends InstanceBase {
 					this.log('warning', `Listener and frame appear on different /24 subnets. Ensure routing or use an IP reachable by the frame. listener=${listenerHost}, frame=${this.config.host}`)
 				}
 			}
-			// Start local notification server
-			this.eventmaster.startNotificationServer(port, (notification) => {
-				try {
-					const n = notification?.result
-					if (!n) return
-					if (n.method === 'notification' && (n.notificationType === 'ScreenDestChanged' || n.notificationType === 'AUXDestChanged')) {
-						this._lastNotificationAt = Date.now()
-						if (this.config?.notifications_debug) {
-							let payload
-							try {
-								payload = JSON.stringify(n.change?.update ?? n)
-							} catch (_) {
-								payload = '[unserializable]'
-							}
-							if (payload && payload.length > 500) payload = payload.slice(0, 500) + '…'
-							this.log('info', `[Subscription] ${n.notificationType}${n.change?.id ? ` (id=${n.change.id})` : ''}: ${payload}`)
-						}
-						// Debounce rapid bursts
-						if (this._notifyTimer) clearTimeout(this._notifyTimer)
-						this._notifyTimer = setTimeout(() => {
-							this._lastUpdateSource = 'subscription'
-							this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify) failed: ${e}`))
-						}, 100)
-					}
-				} catch (e) {
-					this.log('error', `Notification handler error: ${e}`)
+			// Use NotificationListener utility for batching and debounce
+			const events = ['ScreenDestChanged', 'AUXDestChanged']
+			const debounceMs = 200 // Fast feedback, but still debounced
+			this._notificationListener = new NotificationListener(this.config.host, listenerHost, port, events, debounceMs)
+			this._notificationListener.onPull = async ({ reason, snapshot, counts }) => {
+				this._lastNotificationAt = Date.now()
+				if (this.config?.notifications_debug) {
+					this.log('info', `[Subscription] Debounced pull: reason=${reason}, counts=${JSON.stringify(counts)}, snapshot=${JSON.stringify(snapshot)}`)
 				}
-			})
-			// Subscribe on the frame to change events
-			const frameHost = this.config.host
-			this.log('info', `Sending subscribe request: listener=${listenerHost}:${port} topics=[ScreenDestChanged,AUXDestChanged]`)
-			this.eventmaster.subscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], (err, result) => {
-				if (err) this.log('error', `Subscribe error: ${err}`)
-				else this.log('info', `Subscribed OK: frame=${frameHost} -> listener=${listenerHost}:${port}${this.config?.notifications_debug ? ` result=${JSON.stringify(result)}` : ''}`)
-			})
+				// Only fetch content for changed screens/auxes
+				try {
+					const screenIds = new Set([
+						...snapshot.ScreenDestChanged.update,
+						...snapshot.ScreenDestChanged.add,
+						...snapshot.ScreenDestChanged.remove,
+					])
+					const auxIds = new Set([
+						...snapshot.AUXDestChanged.update,
+						...snapshot.AUXDestChanged.add,
+						...snapshot.AUXDestChanged.remove,
+					])
+					// Fetch and update only affected screens
+					for (const id of screenIds) {
+						await new Promise((resolve) => {
+							this.eventmaster.listContent({ id }, (err, res) => {
+								if (err) this.log('error', `listContent(${id}) error: ${err}`)
+								else this.log('info', `Screen ${id} content: ${JSON.stringify(res)}`)
+								// Optionally update tally/feedback here
+								resolve()
+							})
+						})
+					}
+					// Fetch and update only affected auxes
+					for (const id of auxIds) {
+						await new Promise((resolve) => {
+							this.eventmaster.listAuxContent({ id }, (err, res) => {
+								if (err) this.log('error', `listAuxContent(${id}) error: ${err}`)
+								else this.log('info', `AUX ${id} content: ${JSON.stringify(res)}`)
+								// Optionally update tally/feedback here
+								resolve()
+							})
+						})
+					}
+					// After partial update, update tally/feedback
+					this._lastUpdateSource = 'subscription'
+					this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify) failed: ${e}`))
+				} catch (e) {
+					this.log('error', `Notification pull handler error: ${e}`)
+				}
+			}
+			this._notificationListener.start()
 			this.notificationActive = true
 			// If debug is on, warn if no events are seen shortly after subscribing
 			if (this.config?.notifications_debug) {
 				if (this._notifyNoEventTimer) clearTimeout(this._notifyNoEventTimer)
 				this._notifyNoEventTimer = setTimeout(() => {
 					if (!this._lastNotificationAt) {
-						this.log('info', `No subscription events received yet. If you expect changes, verify network reachability and firewall. listener=${listenerHost}:${port}, frame=${frameHost}`)
+						this.log('info', `No subscription events received yet. If you expect changes, verify network reachability and firewall. listener=${listenerHost}:${port}, frame=${this.config.host}`)
 					}
 				}, 10000)
 			}
