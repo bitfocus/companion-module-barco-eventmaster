@@ -58,7 +58,7 @@ class BarcoInstance extends InstanceBase {
 		]
 		// Notification/subscription state
 		this.notificationActive = false
-		this.notificationPort = (this.config && this.config.notification_port) ? this.config.notification_port : 3004
+	this.notificationPort = (this.config && this.config.notification_port) ? this.config.notification_port : 3000
 		this.notificationHost = (this.config && this.config.notification_host) ? this.config.notification_host : undefined
 		this._notifyTimer = null
 		this._notifyNoEventTimer = null
@@ -170,7 +170,7 @@ class BarcoInstance extends InstanceBase {
 		if (!this.eventmaster) return
 		if (this.notificationActive) return
 		try {
-			const port = this.config.notification_port || this.notificationPort || 3004
+			   const port = this.config.notification_port || this.notificationPort || 3000
 			const listenerHost = this.getNotificationHost()
 			this.log('info', `Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`)
 			if (this.config?.notifications_debug) {
@@ -524,14 +524,14 @@ class BarcoInstance extends InstanceBase {
 				default: false,
 				isVisible: (config) => !!config.enable_notifications,
 			},
-			{
-				type: 'number',
-				id: 'notification_port',
-				label: 'Notification server port default 3004 (local)',
-				width: 6,
-				default: 3004,
-				isVisible: (config) => !!config.enable_notifications,
-			},
+			   {
+				   type: 'number',
+				   id: 'notification_port',
+				   label: 'Notification server port default 3000 (local)',
+				   width: 6,
+				   default: 3000,
+				   isVisible: (config) => !!config.enable_notifications,
+			   },
 			{
 				type: 'textinput',
 				id: 'notification_host',
@@ -1040,39 +1040,48 @@ class BarcoInstance extends InstanceBase {
 		const changedVariables = {}
 		let activeSources = 0
 		
-		if (this.eventmasterData && this.eventmasterData.sources) {
-			Object.values(this.eventmasterData.sources).forEach(source => {
-				const pgmDests = sourcePgmDestinations[source.id] || []
-				const pvwDests = sourcePvwDestinations[source.id] || []
-				const isActive = pgmDests.length > 0 || pvwDests.length > 0
-				
-				// Calculate new values
-				const newValues = {
-					[`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
-					[`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 
-						? pgmDests.join(', ') 
-						: 'Not active on PGM',
-					[`source_${source.id + 1}_pvw_destinations`]: pvwDests.length > 0 
-						? pvwDests.join(', ') 
-						: 'Not active on PVW',
-					[`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No'
-				}
-				
-				// Check for changes and only add changed variables
-				Object.entries(newValues).forEach(([key, value]) => {
-					if (this.previousVariableValues[key] !== value) {
-						changedVariables[key] = value
-						this.previousVariableValues[key] = value
-					}
-				})
-				
-				if (pgmDests.length > 0 || pvwDests.length > 0) {
-					activeSources++
-					// Only log active sources to reduce noise
-					// this.log('debug', `Source ${source.id + 1} (${source.Name}): PGM=[${pgmDests.join(', ')}], PVW=[${pvwDests.join(', ')}] - Active: ${isActive ? 'Yes' : 'No'}`)
-				}
-			})
-		}
+		   if (this.eventmasterData && this.eventmasterData.sources) {
+			   Object.values(this.eventmasterData.sources).forEach(source => {
+				   const pgmDests = sourcePgmDestinations[source.id] || []
+				   const pvwDests = sourcePvwDestinations[source.id] || []
+				   const isActive = pgmDests.length > 0 || pvwDests.length > 0
+
+				   // Calculate new values
+				   const newValues = {
+					   [`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
+					   [`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 
+						   ? pgmDests.join(', ') 
+						   : 'Not active on PGM',
+					   [`source_${source.id + 1}_pvw_destinations`]: pvwDests.length > 0 
+						   ? pvwDests.join(', ') 
+						   : 'Not active on PVW',
+					   [`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No',
+				   }
+
+				   // Tally feedback color: red for program, green for preview, yellow for both
+				   let feedbackColor = undefined
+				   if (pgmDests.length > 0 && pvwDests.length > 0) {
+					   feedbackColor = 'yellow' // Both
+				   } else if (pgmDests.length > 0) {
+					   feedbackColor = 'red' // Program
+				   } else if (pvwDests.length > 0) {
+					   feedbackColor = 'green' // Preview
+				   }
+				   newValues[`source_${source.id + 1}_tally`] = feedbackColor
+
+				   // Check for changes and only add changed variables
+				   Object.entries(newValues).forEach(([key, value]) => {
+					   if (this.previousVariableValues[key] !== value) {
+						   changedVariables[key] = value
+						   this.previousVariableValues[key] = value
+					   }
+				   })
+
+				   if (pgmDests.length > 0 || pvwDests.length > 0) {
+					   activeSources++
+				   }
+			   })
+		   }
 		
 		// Set preset name variables
 		if (this.eventmasterData && this.eventmasterData.presets) {
@@ -2635,7 +2644,7 @@ class BarcoInstance extends InstanceBase {
 		feedbacks['source_active_simple'] = {
 			type: 'boolean',
 			name: 'Source Active (Simple)',
-			description: 'Simple indicator if source is active anywhere',
+			description: 'Simple indicator if source is active anywhere, with tally state',
 			defaultStyle: {
 				bgcolor: 16711680, // Red background when active (0xFF0000)
 				color: 16777215 // White text (0xFFFFFF)
@@ -2647,12 +2656,29 @@ class BarcoInstance extends InstanceBase {
 					id: 'source',
 					choices: sourceChoices,
 					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1
+				},
+				{
+					type: 'dropdown',
+					label: 'Tally State',
+					id: 'tallyState',
+					choices: [
+						{ id: 'pgm', label: 'Program' },
+						{ id: 'pvw', label: 'Preview' }
+					],
+					default: 'pgm'
 				}
 			],
 			callback: (feedback) => {
 				const sourceNumber = parseInt(feedback.options.source)
-				const isActive = this.getVariableValue(`source_${sourceNumber}_is_active`)
-				return isActive === 'Yes'
+				const tallyState = feedback.options.tallyState || 'pgm'
+				const pgmActive = this.getVariableValue(`source_${sourceNumber}_pgm_destinations`)
+				const pvwActive = this.getVariableValue(`source_${sourceNumber}_pvw_destinations`)
+				if (tallyState === 'pgm') {
+					return pgmActive && pgmActive !== 'Not active on PGM'
+				} else if (tallyState === 'pvw') {
+					return pvwActive && pvwActive !== 'Not active on PVW'
+				}
+				return false
 			}
 		}
 
@@ -2660,7 +2686,7 @@ class BarcoInstance extends InstanceBase {
 		feedbacks['source_active_on_destinations'] = {
 			type: 'boolean',
 			name: 'Source Active on Destinations',
-			description: 'Indicates if the selected source is active on the selected destinations',
+			description: 'Indicates if the selected source is active on the selected destinations and tally state',
 			defaultStyle: {
 				bgcolor: 16711680, // Red background when active (0xFF0000)
 				color: 16777215 // White text (0xFFFFFF)
@@ -2679,65 +2705,66 @@ class BarcoInstance extends InstanceBase {
 					id: 'destinations',
 					choices: destinationChoices,
 					default: ['anywhere']
+				},
+				{
+					type: 'dropdown',
+					label: 'Tally State',
+					id: 'tallyState',
+					choices: [
+						{ id: 'pgm', label: 'Program' },
+						{ id: 'pvw', label: 'Preview' },
+					],
+					default: 'pgm'
 				}
 			],
 			callback: (feedback) => {
 				const sourceNumber = parseInt(feedback.options.source)
 				const destinations = feedback.options.destinations || ['anywhere']
-				
+				const tallyState = feedback.options.tallyState || 'pgm'
+
 				// Get the source monitoring variables
 				const pgmDestinations = this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || ''
 				const pvwDestinations = this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || ''
-				
-				// Check each selected destination
+
+				// Helper to check if source is active on selected destinations
+				let isActive = false
 				for (const dest of destinations) {
 					if (dest === 'anywhere') {
-						// Check if source is active anywhere
-						const isActive = this.getVariableValue(`source_${sourceNumber}_is_active`)
-						if (isActive === 'Yes') return true
+						isActive = (tallyState === 'pgm' && pgmDestinations && pgmDestinations !== 'Not active on PGM')
+							|| (tallyState === 'pvw' && pvwDestinations && pvwDestinations !== 'Not active on PVW')
+						if (isActive) return true
 					} else if (dest === 'anywhere_pgm') {
-						// Check if source is active on any PGM
-						if (pgmDestinations && pgmDestinations !== 'Not active on PGM') return true
+						if (tallyState === 'pgm') {
+							if (pgmDestinations && pgmDestinations !== 'Not active on PGM') return true
+						}
 					} else if (dest === 'anywhere_pvw') {
-						// Check if source is active on any PVW
-						if (pvwDestinations && pvwDestinations !== 'Not active on PVW') return true
+						if (tallyState === 'pvw') {
+							if (pvwDestinations && pvwDestinations !== 'Not active on PVW') return true
+						}
 					} else if (dest.startsWith('screen_')) {
-						// Check specific screen destination
 						const parts = dest.split('_')
 						const screenId = parts[1]
 						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						
-						if (mode === 'pgm') {
+						if ((mode === 'pgm' && tallyState === 'pgm') || (tallyState === 'pgm' && !mode)) {
 							if (pgmDestinations.includes(`Screen `) && pgmDestinations.includes(`${screenId}`)) return true
-						} else if (mode === 'pvw') {
+						} else if ((mode === 'pvw' && tallyState === 'pvw') || (tallyState === 'pvw' && !mode)) {
 							if (pvwDestinations.includes(`Screen `) && pvwDestinations.includes(`${screenId}`)) return true
-						} else {
-							// Check both PGM and PVW
-							if ((pgmDestinations.includes(`Screen `) && pgmDestinations.includes(`${screenId}`)) ||
-								(pvwDestinations.includes(`Screen `) && pvwDestinations.includes(`${screenId}`))) return true
 						}
 					} else if (dest.startsWith('aux_')) {
-						// Check specific AUX destination
 						const parts = dest.split('_')
 						const auxId = parts[1]
 						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						
 						// Find the AUX name
 						const aux = this.eventmasterData?.AuxDestinations ? 
 							Object.values(this.eventmasterData.AuxDestinations).find(a => a.id == auxId) : null
 						const auxName = aux ? aux.Name : `AUX ${auxId}`
-						
-						if (mode === 'pgm') {
+						if (mode === 'pgm' && tallyState === 'pgm') {
 							if (pgmDestinations.includes(`AUX ${auxName}`)) return true
-						} else if (mode === 'pvw') {
+						} else if (mode === 'pvw' && tallyState === 'pvw') {
 							if (pvwDestinations.includes(`AUX ${auxName}`)) return true
-						} else {
-							// Check both PGM and PVW
-							if (pgmDestinations.includes(`AUX ${auxName}`) || pvwDestinations.includes(`AUX ${auxName}`)) return true
 						}
 					}
 				}
-				
 				return false
 			}
 		}
