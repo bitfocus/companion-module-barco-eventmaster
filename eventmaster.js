@@ -170,7 +170,13 @@ class BarcoInstance extends InstanceBase {
 		if (!this.eventmaster) return
 		if (this.notificationActive) return
 		try {
-			   const port = this.config.notification_port || this.notificationPort || 3000
+			// First unsubscribe to be sure we start clean
+			this.log('info', 'Unsubscribing from all notifications to start clean...')
+			this.eventmaster.unsubscribe(() => {
+				this.log('info', 'Unsubscribe completed')
+			})
+			
+			const port = this.config.notification_port || this.notificationPort || 3000
 			const listenerHost = this.getNotificationHost()
 			this.log('info', `Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`)
 			if (this.config?.notifications_debug) {
@@ -872,7 +878,7 @@ class BarcoInstance extends InstanceBase {
 			
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
-					// this.log('debug', `Querying screen destination ${dest.id} (${dest.Name})...`)
+					this.log('info', `[Screen Debug] Querying screen destination ${dest.id} (${dest.Name})...`)
 					
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
@@ -883,6 +889,8 @@ class BarcoInstance extends InstanceBase {
 					
 					if (res && res.response) {
 						const content = res.response
+
+						
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
 							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
@@ -910,10 +918,10 @@ class BarcoInstance extends InstanceBase {
 							content.Layers.forEach(layer => {
 								// Check if layer is on PGM
 								if (layer.PgmMode !== undefined && layer.PgmMode > 0 && 
-									layer.SrcIdx !== undefined && layer.SrcIdx !== -1 && 
+									layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1 && 
 									layer.Freeze !== undefined && layer.Freeze === 0) {
 									
-									const sourceId = layer.SrcIdx
+									const sourceId = layer.LastSrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
 									}
@@ -921,10 +929,10 @@ class BarcoInstance extends InstanceBase {
 								
 								// Check if layer is on PVW
 								if (layer.PvwMode !== undefined && layer.PvwMode > 0 && 
-									layer.SrcIdx !== undefined && layer.SrcIdx !== -1 && 
+									layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1 && 
 									layer.Freeze !== undefined && layer.Freeze === 0) {
 									
-									const sourceId = layer.SrcIdx
+									const sourceId = layer.LastSrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
 									}
@@ -2687,21 +2695,53 @@ class BarcoInstance extends InstanceBase {
 						   const parts = dest.split('_')
 						   const screenId = parts[1]
 						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						   const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `Screen ${screenId}`
-						   if ((mode === 'pgm' && tallyState === 'pgm') || (tallyState === 'pgm' && !mode)) {
-							   if (pgmDestinations.includes(screenName)) return true
-						   } else if ((mode === 'pvw' && tallyState === 'pvw') || (tallyState === 'pvw' && !mode)) {
-							   if (pvwDestinations.includes(screenName)) return true
+						   const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `${screenId}`
+						   
+						   // Debug logging to see what we're comparing
+						   this.log('info', `[Screen Debug] Checking screen_${screenId} (${screenName}), mode=${mode}, tallyState=${tallyState}`)
+						   this.log('info', `[Screen Debug] PGM destinations: ${JSON.stringify(pgmDestinations)}`)
+						   this.log('info', `[Screen Debug] PVW destinations: ${JSON.stringify(pvwDestinations)}`)
+						   this.log('info', `[Screen Debug] Looking for: "Screen ${screenName}" or starting with "Screen ${screenName} L"`)
+						   
+						   if (mode === 'pgm' && tallyState === 'pgm') {
+							   // Check for exact screen name match and also check for layer matches (e.g., "Screen LED MAIN L1")
+							   const hasScreenMatch = pgmDestinations.some(pgmDest => 
+								   pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`)
+							   )
+							   this.log('info', `[Screen Debug] PGM match result: ${hasScreenMatch}`)
+							   if (hasScreenMatch) return true
+						   } else if (mode === 'pvw' && tallyState === 'pvw') {
+							   const hasScreenMatch = pvwDestinations.some(pvwDest => 
+								   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
+							   )
+							   this.log('info', `[Screen Debug] PVW match result: ${hasScreenMatch}`)
+							   if (hasScreenMatch) return true
+						   } else if (!mode) {
+							   // No specific mode - check both PGM and PVW
+							   const hasScreenMatch = 
+								   (tallyState === 'pgm' && pgmDestinations.some(pgmDest => 
+									   pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`)
+								   )) ||
+								   (tallyState === 'pvw' && pvwDestinations.some(pvwDest => 
+									   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
+								   ))
+							   this.log('info', `[Screen Debug] Combined match result: ${hasScreenMatch}`)
+							   if (hasScreenMatch) return true
 						   }
 					   } else if (dest.startsWith('aux_')) {
 						   const parts = dest.split('_')
 						   const auxId = parts[1]
 						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						   const auxName = this.eventmasterData?.AuxDestinations?.[auxId]?.Name || `AUX ${auxId}`
+						   const auxName = this.eventmasterData?.AuxDestinations?.[auxId]?.Name || `${auxId}`
+						   
 						   if (mode === 'pgm' && tallyState === 'pgm') {
-							   if (pgmDestinations.includes(auxName)) return true
+							   if (pgmDestinations.includes(`AUX ${auxName}`)) return true
 						   } else if (mode === 'pvw' && tallyState === 'pvw') {
-							   if (pvwDestinations.includes(auxName)) return true
+							   if (pvwDestinations.includes(`AUX ${auxName}`)) return true
+						   } else if (!mode) {
+							   // No specific mode - check both PGM and PVW based on current tally state
+							   if (tallyState === 'pgm' && pgmDestinations.includes(`AUX ${auxName}`)) return true
+							   if (tallyState === 'pvw' && pvwDestinations.includes(`AUX ${auxName}`)) return true
 						   }
 					   }
 				   }
