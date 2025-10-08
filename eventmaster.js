@@ -65,6 +65,7 @@ class BarcoInstance extends InstanceBase {
 		this._lastNotificationAt = 0
 		this.setVariableDefinitions([
 			{ variableId: 'frame_IP', name: 'Frame IP Address' },
+			{ variableId: 'frame_MAC', name: 'Frame MAC Address' },
 			{ variableId: 'frame_version', name: 'Frame Version' },
 			{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
 			{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
@@ -255,16 +256,19 @@ class BarcoInstance extends InstanceBase {
 				if (frameData) {
 					// Extract the basic frame data
 					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
+					const frameMAC = frameData.Enet?.MacAddress || 'Unknown'
 					const version = frameData.Version || 'Unknown'
 					const osVersion = frameData.OSVersion || 'Unknown'
 					
 					this.eventmasterData.frameIP = frameIP
+					this.eventmasterData.frameMAC = frameMAC
 					this.eventmasterData.version = version
 					this.eventmasterData.OSVersion = osVersion
 					
 					// Start with basic variables
 					const variableValues = {
 						frame_IP: frameIP,
+						frame_MAC: frameMAC,
 						frame_version: version,
 						frame_OSVersion: osVersion,
 					}
@@ -272,6 +276,7 @@ class BarcoInstance extends InstanceBase {
 					// Build dynamic variable definitions including card slots
 					const variableDefinitions = [
 						{ variableId: 'frame_IP', name: 'Frame IP Address' },
+						{ variableId: 'frame_MAC', name: 'Frame MAC Address' },
 						{ variableId: 'frame_version', name: 'Frame Version' },
 						{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
 						{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
@@ -699,6 +704,7 @@ class BarcoInstance extends InstanceBase {
 			? [...this.frameVariableDefinitions] 
 			: [
 				{ variableId: 'frame_IP', name: 'Frame IP Address' },
+				{ variableId: 'frame_MAC', name: 'Frame MAC Address' },
 				{ variableId: 'frame_version', name: 'Frame Version' },
 				{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
 				{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
