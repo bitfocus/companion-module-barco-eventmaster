@@ -512,33 +512,40 @@ class BarcoInstance extends InstanceBase {
 		}, {})
 	}
 
-	// Helper function to convert dropdown index to actual EventMaster source ID
-	getActualSourceId = (dropdownIndex) => {
+	// Helper function to convert a selected source value into the actual EventMaster source ID.
+	// Companion dropdowns now store the EventMaster source ID directly, but some older code paths
+	// still pass an array index. Resolve by real source ID first, then fall back to index lookup.
+	getActualSourceId = (selectedValue) => {
 		const sources = Object.values(this.eventmasterData.sources)
-		if (dropdownIndex >= 0 && dropdownIndex < sources.length) {
-			// valid index; proceed to resolve actual source id
-			const selectedSource = sources[dropdownIndex]
-			this.log('debug', `Source lookup: dropdown index ${dropdownIndex} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`)
-			
+		const selectedSource =
+			sources.find((source) => source.id === selectedValue) ||
+			(selectedValue >= 0 && selectedValue < sources.length ? sources[selectedValue] : undefined)
+
+		if (selectedSource) {
+			const lookupType = selectedSource.id === selectedValue ? 'source id' : 'dropdown index'
+			this.log(
+				'debug',
+				`Source lookup: ${lookupType} ${selectedValue} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`
+			)
+
 			// Use InputCfgIndex for inputs (>=0), use StillIndex for stills (InputCfgIndex=-1)
 			let sourceIdToUse
 			let sourceType
-			
+
 			if (selectedSource.InputCfgIndex !== undefined && selectedSource.InputCfgIndex >= 0) {
-				// Input source - use InputCfgIndex
 				sourceIdToUse = selectedSource.InputCfgIndex
 				sourceType = 'Input'
 			} else {
-				// Still source - try StillIndex first, fallback to id if StillIndex is undefined
-				sourceIdToUse = (selectedSource.StillIndex !== undefined) ? selectedSource.StillIndex : selectedSource.id
+				sourceIdToUse = selectedSource.StillIndex !== undefined ? selectedSource.StillIndex : selectedSource.id
 				sourceType = 'Still'
 			}
-			
+
 			this.log('debug', `Using source ID: ${sourceIdToUse} (${sourceType})`)
 			return sourceIdToUse
 		}
-		this.log('error', `Invalid source dropdown index: ${dropdownIndex}`)
-		return dropdownIndex // Fallback to original value if not found
+
+		this.log('error', `Invalid source selection: ${selectedValue}`)
+		return selectedValue
 	}
 
 	// Helper function to get SrcType based on InputCfgIndex
@@ -1562,7 +1569,7 @@ class BarcoInstance extends InstanceBase {
 				let hasBgChanges = false
 
 				// Program background (id: 0)
-				if (action.options.pgmBgSource && action.options.pgmBgSource !== '') {
+				if (action.options.pgmBgSource !== undefined && action.options.pgmBgSource !== '') {
 					const pgmBgSourceId = this.getActualSourceId(parseInt(action.options.pgmBgSource))
 					
 					bgLayers.push({
@@ -1575,7 +1582,7 @@ class BarcoInstance extends InstanceBase {
 				}
 
 				// Preview background (id: 1)
-				if (action.options.pvwBgSource && action.options.pvwBgSource !== '') {
+				if (action.options.pvwBgSource !== undefined && action.options.pvwBgSource !== '') {
 					const pvwBgSourceId = this.getActualSourceId(parseInt(action.options.pvwBgSource))
 					
 					bgLayers.push({
@@ -1603,7 +1610,7 @@ class BarcoInstance extends InstanceBase {
 					}
 
 					// Set layer source
-					if (action.options.layerSource && action.options.layerSource !== '') {
+					if (action.options.layerSource !== undefined && action.options.layerSource !== '') {
 						const layerSourceId = this.getActualSourceId(parseInt(action.options.layerSource))
 						layer.LastSrcIdx = layerSourceId
 					}
