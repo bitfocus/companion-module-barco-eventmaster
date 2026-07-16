@@ -102,7 +102,7 @@ class BarcoInstance extends InstanceBase {
 		}
 		try {
 			await this.teardownNotifications()
-		} catch (e) {
+		} catch {
 			// best-effort
 		}
 		this.config = config
@@ -259,7 +259,7 @@ class BarcoInstance extends InstanceBase {
 			const events = ['ScreenDestChanged', 'AUXDestChanged']
 			const debounceMs = 200 // Fast feedback, but still debounced
 			this._notificationListener = new NotificationListener(this.config.host, listenerHost, port, events, debounceMs)
-			this._notificationListener.onPull = async ({ reason, snapshot, counts }) => {
+			this._notificationListener.onPull = async () => {
 				this._lastNotificationAt = Date.now()
 				// Only fetch content for changed screens/auxes
 				try {
@@ -285,7 +285,7 @@ class BarcoInstance extends InstanceBase {
 			const pa = (a || '').split('.')
 			const pb = (b || '').split('.')
 			return pa.length === 4 && pb.length === 4 && pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2]
-		} catch (_) {
+		} catch {
 			return false
 		}
 	}
@@ -299,7 +299,9 @@ class BarcoInstance extends InstanceBase {
 					if (iface.family === 'IPv4' && !iface.internal) out.push(`${name}:${iface.address}`)
 				}
 			}
-		} catch (_) {}
+		} catch {
+			// ignore
+		}
 		return out
 	}
 
@@ -313,7 +315,7 @@ class BarcoInstance extends InstanceBase {
 			await new Promise((resolve) => {
 				try {
 					this.eventmaster.unsubscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], () => resolve())
-				} catch (e) {
+				} catch {
 					resolve()
 				}
 			})
@@ -326,7 +328,7 @@ class BarcoInstance extends InstanceBase {
 				clearTimeout(this._notifyNoEventTimer)
 				this._notifyNoEventTimer = null
 			}
-		} catch (e) {
+		} catch {
 			// ignore teardown errors
 		}
 	}
@@ -344,7 +346,9 @@ class BarcoInstance extends InstanceBase {
 					}
 				}
 			}
-		} catch (_) {}
+		} catch {
+			// ignore
+		}
 		// Fallback to localhost
 		return '127.0.0.1'
 	}
@@ -616,7 +620,7 @@ class BarcoInstance extends InstanceBase {
 		// Teardown notifications if active
 		try {
 			await this.teardownNotifications()
-		} catch (e) {
+		} catch {
 			// ignore
 		}
 		delete this.eventmaster
@@ -1092,7 +1096,6 @@ class BarcoInstance extends InstanceBase {
 		}
 
 		// Set variable values for all sources
-		const variableValues = {}
 		const changedVariables = {}
 		let activeSources = 0
 
@@ -1219,7 +1222,7 @@ class BarcoInstance extends InstanceBase {
 				label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
 				id: preset.id,
 			}))
-		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source, index) => {
+		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => {
 			const sourceType = source.InputCfgIndex !== undefined && source.InputCfgIndex >= 0 ? 'Input' : 'Still'
 			return {
 				label: `${source.Name} (${sourceType})`,

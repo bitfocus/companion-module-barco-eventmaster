@@ -6,7 +6,7 @@ const _ = require('lodash')
  * Get all the presets
  * @returns presets
  */
-module.exports = function getPresets(eventmasterData, log) {
+module.exports = function getPresets(eventmasterData, _log) {
 	const presets = {} // main array
 
 	presets['Take'] = {
@@ -1255,7 +1255,6 @@ module.exports = function getPresets(eventmasterData, log) {
 		Object.keys(eventmasterData.ScreenDestinations).forEach((key) => {
 			const screen = eventmasterData.ScreenDestinations[key]
 			const screenId = screen.id
-			const screenName = screen.Name
 
 			// Arm preset
 			presets[`screen_${screenId}_arm`] = {
@@ -1320,7 +1319,6 @@ module.exports = function getPresets(eventmasterData, log) {
 		Object.keys(eventmasterData.AuxDestinations).forEach((key) => {
 			const aux = eventmasterData.AuxDestinations[key]
 			const auxId = aux.id
-			const auxName = aux.Name
 
 			// Arm preset
 			presets[`aux_${auxId}_arm`] = {

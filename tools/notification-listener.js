@@ -33,7 +33,7 @@ class NotificationListener {
 				} else {
 					this.schedulePull(type || 'unknown')
 				}
-			} catch (e) {
+			} catch {
 				// Optionally log error
 			}
 		})
