@@ -1132,7 +1132,7 @@ module.exports = function getPresets(eventmasterData, log) {
 							options: {
 								source: sourceNumber,
 								destinations: [`aux_${auxId}_pgm`],
-								tallyState: 'pgm' // Only highlight for PGM state
+								tallyState: 'pgm', // Only highlight for PGM state
 							},
 							style: {
 								bgcolor: combineRgb(255, 0, 0), // Red when active on this AUX PGM
@@ -1385,7 +1385,7 @@ module.exports = function getPresets(eventmasterData, log) {
 		Object.keys(eventmasterData.sources).forEach((sourceKey) => {
 			const source = eventmasterData.sources[sourceKey]
 			const sourceNumber = source.id + 1 // Convert to 1-based numbering
-			
+
 			presets[`source_${sourceNumber}_feedback`] = {
 				type: 'button',
 				category: 'Sources Feedback (simple)',
@@ -1407,7 +1407,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						feedbackId: 'source_active_simple',
 						options: {
 							source: sourceNumber,
-							tallyState: 'pvw' // Only indicate PVW status
+							tallyState: 'pvw', // Only indicate PVW status
 						},
 						style: {
 							bgcolor: combineRgb(0, 255, 0), // Green when active
@@ -1417,7 +1417,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						feedbackId: 'source_active_simple',
 						options: {
 							source: sourceNumber,
-							tallyState: 'pgm' // Only indicate PGM status
+							tallyState: 'pgm', // Only indicate PGM status
 						},
 						style: {
 							bgcolor: combineRgb(255, 0, 0), // Red when active
@@ -1448,7 +1448,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						options: {
 							source: sourceNumber,
 							tallyState: 'pvw', // Only indicate PVW status
-							destinations: ['anywhere'] // All destinations
+							destinations: ['anywhere'], // All destinations
 						},
 						style: {
 							bgcolor: combineRgb(0, 255, 0), // Green when active
@@ -1460,7 +1460,7 @@ module.exports = function getPresets(eventmasterData, log) {
 						options: {
 							source: sourceNumber,
 							tallyState: 'pgm', // Only indicate PGM status
-							destinations: ['anywhere'] // All destinations
+							destinations: ['anywhere'], // All destinations
 						},
 						style: {
 							bgcolor: combineRgb(255, 0, 0), // Red when active
