@@ -58,8 +58,8 @@ class BarcoInstance extends InstanceBase {
 		]
 		// Notification/subscription state
 		this.notificationActive = false
-	this.notificationPort = (this.config && this.config.notification_port) ? this.config.notification_port : 3000
-		this.notificationHost = (this.config && this.config.notification_host) ? this.config.notification_host : undefined
+		this.notificationPort = this.config && this.config.notification_port ? this.config.notification_port : 3000
+		this.notificationHost = this.config && this.config.notification_host ? this.config.notification_host : undefined
 		this._notifyTimer = null
 		this._notifyNoEventTimer = null
 		this._lastNotificationAt = 0
@@ -78,56 +78,165 @@ class BarcoInstance extends InstanceBase {
 			'Power supply module is present, and everything is OK.',
 		]
 		this.updateStatus(InstanceStatus.UnknownWarning)
+
+		// Register actions, feedbacks and presets immediately using the placeholder
+		// data above, so the user can build and configure buttons even while the
+		// device is offline/unreachable. These are refreshed with real values once
+		// a connection is established (see initEventmaster / eventmasterPoller).
+		this.refreshDefinitions()
+
 		this.connection()
 		this.log(`debug`, 'creating eventmaster')
 	}
 
 	async configUpdated(config) {
+		this.log('debug', 'Config updated, reconnecting')
+		// Stop existing timers and notifications before reconnecting with new settings.
+		if (this.polling_interval) {
+			clearInterval(this.polling_interval)
+			this.polling_interval = undefined
+		}
+		if (this.retry_interval) {
+			clearInterval(this.retry_interval)
+			this.retry_interval = undefined
+		}
+		try {
+			await this.teardownNotifications()
+		} catch {
+			// best-effort
+		}
 		this.config = config
+		// Refresh cached notification settings from the new config.
+		this.notificationPort = this.config?.notification_port || 3000
+		this.notificationHost = this.config?.notification_host || undefined
 		this.connection()
 	}
 
 	connection() {
-		if (this.config) {
-			ping.promise.probe(this.config.host).then((res) => {
+		// Guard: a host is required before we can ping or connect.
+		if (!this.config || !this.config.host) {
+			this.log('error', 'Cannot connect: no target IP configured')
+			this.updateStatus(InstanceStatus.BadConfig, 'No target IP configured')
+			return
+		}
+
+		// Clear any existing retry timer so we never stack up multiple pollers
+		// (e.g. when configUpdated() is called repeatedly).
+		if (this.retry_interval) {
+			clearInterval(this.retry_interval)
+			this.retry_interval = undefined
+		}
+
+		this.pingAndConnect()
+	}
+
+	// Ping the frame; connect on success, otherwise schedule retries.
+	// All async paths are guarded so a rejected probe can never crash the module.
+	pingAndConnect() {
+		// If a previous attempt found the local ping program unusable (common on
+		// locked-down Linux hosts, containers, or HA appliances with a restricted
+		// PATH/permissions), skip the ICMP pre-check entirely and connect directly.
+		// The EventMaster JSON API call is the real reachability test anyway.
+		if (this.pingUnavailable) {
+			this.initEventmaster()
+			return
+		}
+
+		ping.promise
+			.probe(this.config.host)
+			.then((res) => {
 				if (res.alive) {
-					this.log(`debug`, 'ping ok')
+					this.log('debug', `ping ok (${this.config.host})`)
+					this.clearRetry()
 					this.initEventmaster()
 				} else {
-					this.log(`debug`, 'ping failed')
+					this.log('debug', `ping failed (${this.config.host})`)
 					this.updateStatus(InstanceStatus.Connecting, 'No ping response')
-					this.retry_interval = setInterval(() => {
-						ping.promise.probe(this.config.host).then((res) => {
-							if (res.alive) {
-								this.log(`debug`, 'ping ok')
-								this.initEventmaster()
-							} else {
-								this.log(`debug`, 'ping failed')
-								this.updateStatus(InstanceStatus.Connecting, 'No ping response')
-							}
-						})
-					}, 5000)
+					this.scheduleRetry()
 				}
 			})
+			.catch((err) => {
+				// A rejection here means the local ping program could not be executed
+				// Falling back to a direct connection
+				this.pingUnavailable = true
+				this.log(
+					'warn',
+					`Unable to run local ping program (${err?.message || err}). ` +
+						`Skipping ICMP pre-check and connecting to ${this.config.host} directly.`,
+				)
+				this.clearRetry()
+				this.initEventmaster()
+			})
+	}
+
+	clearRetry() {
+		if (this.retry_interval) {
+			clearInterval(this.retry_interval)
+			this.retry_interval = undefined
 		}
 	}
 
+	scheduleRetry() {
+		if (this.retry_interval) return // a retry loop is already running
+		this.retry_interval = setInterval(() => {
+			this.pingAndConnect()
+		}, 5000)
+	}
+
 	initEventmaster() {
-		console.log('Connecting to EventMaster at', this.config.host)
-		this.eventmaster = new EventMaster(this.config.host)
+		this.log('info', `Connecting to EventMaster at ${this.config.host}`)
+		try {
+			this.eventmaster = new EventMaster(this.config.host)
+		} catch (err) {
+			this.log('error', `Failed to create EventMaster client: ${err?.message || err}`)
+			this.updateStatus(InstanceStatus.ConnectionFailure, 'Failed to create client')
+			this.scheduleRetry()
+			return
+		}
+
 		// Setup optional live notifications
 		if (this.config.enable_notifications) {
 			this.setupNotifications().catch((e) => this.log('error', `Notifications setup failed: ${e}`))
 		}
 		this.updateStatus(InstanceStatus.Ok)
-		this.getAllDataFromEventmaster().then(() => {
-			this.setActionDefinitions(this.getActions())
-			this.setFeedbackDefinitions(this.getFeedbacks())
-			this.setPresetDefinitions(getPresets(this.eventmasterData))
+		this.getAllDataFromEventmaster()
+			.then(() => {
+				this.refreshDefinitions()
+				this.eventmasterPoller()
+			})
+			.catch((err) => {
+				// A rejection here would otherwise become an unhandled rejection and crash the module.
+				this.log('error', `Initial data fetch failed: ${err?.message || err}`)
+				this.updateStatus(InstanceStatus.ConnectionFailure, 'Initial data fetch failed')
+				// Still attempt to register definitions and start polling so the module recovers.
+				this.refreshDefinitions()
+				this.eventmasterPoller()
+			})
+		if (this.retry_interval) {
+			clearInterval(this.retry_interval)
+			this.retry_interval = undefined
+		}
+	}
 
-			this.eventmasterPoller()
-		})
-		if (this.retry_interval) clearInterval(this.retry_interval)
+	// Rebuild action/feedback/preset definitions from the current data set.
+	// Each builder is guarded individually so malformed data in one section
+	// cannot take down the whole module.
+	refreshDefinitions() {
+		try {
+			this.setActionDefinitions(this.getActions())
+		} catch (err) {
+			this.log('error', `Failed to build actions: ${err?.message || err}`)
+		}
+		try {
+			this.setFeedbackDefinitions(this.getFeedbacks())
+		} catch (err) {
+			this.log('error', `Failed to build feedbacks: ${err?.message || err}`)
+		}
+		try {
+			this.setPresetDefinitions(getPresets(this.eventmasterData))
+		} catch (err) {
+			this.log('error', `Failed to build presets: ${err?.message || err}`)
+		}
 	}
 
 	async setupNotifications() {
@@ -139,21 +248,26 @@ class BarcoInstance extends InstanceBase {
 			this.eventmaster.unsubscribe(() => {
 				this.log('info', 'Unsubscribe completed')
 			})
-			
+
 			const port = this.config.notification_port || this.notificationPort || 3000
 			const listenerHost = this.getNotificationHost()
-			this.log('info', `Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`)
+			this.log(
+				'info',
+				`Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`,
+			)
 			// Use NotificationListener utility for batching and debounce
 			const events = ['ScreenDestChanged', 'AUXDestChanged']
 			const debounceMs = 200 // Fast feedback, but still debounced
 			this._notificationListener = new NotificationListener(this.config.host, listenerHost, port, events, debounceMs)
-			this._notificationListener.onPull = async ({ reason, snapshot, counts }) => {
+			this._notificationListener.onPull = async () => {
 				this._lastNotificationAt = Date.now()
 				// Only fetch content for changed screens/auxes
 				try {
 					// Always query all screens and auxes after any notification to ensure state is complete
 					this._lastUpdateSource = 'subscription-notify'
-					await this.autoPopulateSourceMonitoring().catch((e) => this.log('error', `Auto-populate (notify, full) failed: ${e}`))
+					await this.autoPopulateSourceMonitoring().catch((e) =>
+						this.log('error', `Auto-populate (notify, full) failed: ${e}`),
+					)
 				} catch (e) {
 					this.log('error', `Notification pull handler error: ${e}`)
 				}
@@ -171,7 +285,9 @@ class BarcoInstance extends InstanceBase {
 			const pa = (a || '').split('.')
 			const pb = (b || '').split('.')
 			return pa.length === 4 && pb.length === 4 && pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2]
-		} catch (_) { return false }
+		} catch {
+			return false
+		}
 	}
 
 	getLocalIPv4s() {
@@ -183,7 +299,9 @@ class BarcoInstance extends InstanceBase {
 					if (iface.family === 'IPv4' && !iface.internal) out.push(`${name}:${iface.address}`)
 				}
 			}
-		} catch (_) {}
+		} catch {
+			// ignore
+		}
 		return out
 	}
 
@@ -197,7 +315,7 @@ class BarcoInstance extends InstanceBase {
 			await new Promise((resolve) => {
 				try {
 					this.eventmaster.unsubscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], () => resolve())
-				} catch (e) {
+				} catch {
 					resolve()
 				}
 			})
@@ -210,7 +328,7 @@ class BarcoInstance extends InstanceBase {
 				clearTimeout(this._notifyNoEventTimer)
 				this._notifyNoEventTimer = null
 			}
-		} catch (e) {
+		} catch {
 			// ignore teardown errors
 		}
 	}
@@ -228,7 +346,9 @@ class BarcoInstance extends InstanceBase {
 					}
 				}
 			}
-		} catch (_) {}
+		} catch {
+			// ignore
+		}
 		// Fallback to localhost
 		return '127.0.0.1'
 	}
@@ -242,29 +362,34 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				
+
 				// Log the response structure to understand the format
 				// console.log('Frame Settings Response:', JSON.stringify(res, null, 2))
-				
+
 				// Parse the correct structure based on the actual response
 				let frameData = null
-				if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
+				if (
+					res.response &&
+					res.response.System &&
+					res.response.System.FrameCollection &&
+					res.response.System.FrameCollection.Frame
+				) {
 					// Frame is a single object, not an array
 					frameData = res.response.System.FrameCollection.Frame
 				}
-				
+
 				if (frameData) {
 					// Extract the basic frame data
 					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
 					const frameMAC = frameData.Enet?.MacAddress || 'Unknown'
 					const version = frameData.Version || 'Unknown'
 					const osVersion = frameData.OSVersion || 'Unknown'
-					
+
 					this.eventmasterData.frameIP = frameIP
 					this.eventmasterData.frameMAC = frameMAC
 					this.eventmasterData.version = version
 					this.eventmasterData.OSVersion = osVersion
-					
+
 					// Start with basic variables
 					const variableValues = {
 						frame_IP: frameIP,
@@ -272,7 +397,7 @@ class BarcoInstance extends InstanceBase {
 						frame_version: version,
 						frame_OSVersion: osVersion,
 					}
-					
+
 					// Build dynamic variable definitions including card slots
 					const variableDefinitions = [
 						{ variableId: 'frame_IP', name: 'Frame IP Address' },
@@ -282,7 +407,7 @@ class BarcoInstance extends InstanceBase {
 						{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
 						{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
 					]
-					
+
 					// Process card slots if they exist
 					if (frameData.Slot && Array.isArray(frameData.Slot)) {
 						this.detectedCardSlots = [] // Reset detected cards
@@ -290,15 +415,13 @@ class BarcoInstance extends InstanceBase {
 							if (slot.Card) {
 								const slotNum = index + 1
 								const card = slot.Card
-								
+
 								// Store detected card info
 								this.detectedCardSlots.push(slotNum)
-								
+
 								// Add variable definition for this card (single combined variable)
-								variableDefinitions.push(
-									{ variableId: `card${slotNum}_info`, name: `Card ${slotNum} Information` }
-								)
-								
+								variableDefinitions.push({ variableId: `card${slotNum}_info`, name: `Card ${slotNum} Information` })
+
 								// Build health status
 								let healthStatus = 'OK'
 								if (card.OverTemp === 1 && card.FanWarn === 1) {
@@ -308,20 +431,18 @@ class BarcoInstance extends InstanceBase {
 								} else if (card.FanWarn === 1) {
 									healthStatus = 'Fan Warning'
 								}
-								
+
 								// Combine all card info into a single string
 								const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
 								variableValues[`card${slotNum}_info`] = cardInfo
 							}
 						})
 					}
-					
+
 					// Add SysCard (motherboard) information if available
 					if (frameData.SysCard) {
-						variableDefinitions.push(
-							{ variableId: 'syscard_info', name: 'System Card Information' }
-						)
-						
+						variableDefinitions.push({ variableId: 'syscard_info', name: 'System Card Information' })
+
 						let sysHealthStatus = 'OK'
 						if (frameData.SysCard.OverTemp === 1 && frameData.SysCard.FanWarn === 1) {
 							sysHealthStatus = 'Over Temp + Fan Warning'
@@ -330,18 +451,18 @@ class BarcoInstance extends InstanceBase {
 						} else if (frameData.SysCard.FanWarn === 1) {
 							sysHealthStatus = 'Fan Warning'
 						}
-						
+
 						const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
 						variableValues.syscard_info = sysCardInfo
 					}
-					
+
 					// Store frame variable definitions for use by updateDestinationVariables
 					this.frameVariableDefinitions = variableDefinitions
-					
+
 					// Delegate variable definition updates to the centralized updater
 					// This avoids redefining on every poll and ensures values are repopulated correctly
 					this.updateDestinationVariables()
-					
+
 					// Set all variable values with change tracking
 					const changedFrameVariables = {}
 					Object.entries(variableValues).forEach(([key, value]) => {
@@ -350,17 +471,17 @@ class BarcoInstance extends InstanceBase {
 							this.previousVariableValues[key] = value
 						}
 					})
-					
+
 					if (Object.keys(changedFrameVariables).length > 0) {
 						this.setVariableValues(changedFrameVariables)
 					}
-					
+
 					// this.log('debug', `Frame Settings Updated: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
 					// if (frameData.Slot) {
 					//	this.log('debug', `Found ${frameData.Slot.length} card slots`)
 					// }
 				} else {
-					this.log('warning', 'Frame settings data structure not recognized')
+					this.log('warn', 'Frame settings data structure not recognized')
 				}
 			} catch (err) {
 				this.log('error', 'EventMaster Frame Settings Error: ' + err)
@@ -370,7 +491,7 @@ class BarcoInstance extends InstanceBase {
 					frame_version: 'Error fetching',
 					frame_OSVersion: 'Error fetching',
 				}
-				
+
 				const changedFallbackVariables = {}
 				Object.entries(fallbackVariables).forEach(([key, value]) => {
 					if (this.previousVariableValues[key] !== value) {
@@ -378,7 +499,7 @@ class BarcoInstance extends InstanceBase {
 						this.previousVariableValues[key] = value
 					}
 				})
-				
+
 				if (Object.keys(changedFallbackVariables).length > 0) {
 					this.setVariableValues(changedFallbackVariables)
 				}
@@ -387,23 +508,32 @@ class BarcoInstance extends InstanceBase {
 	}
 	// Polling function to keep data updated
 	eventmasterPoller() {
-		if (this.config) {
-			if (this.config.pollingInterval === 0) {
-				if (this.polling_interval) clearInterval(this.polling_interval)
-			} else {
-				this.polling_interval = setInterval(
-					() => {
-						this._lastUpdateSource = 'poll'
-						this.getAllDataFromEventmaster().then(() => {
-							this.setActionDefinitions(this.getActions())
-							this.setFeedbackDefinitions(this.getFeedbacks())
-							this.setPresetDefinitions(getPresets(this.eventmasterData))
-						})
-					},
-					Math.ceil(this.config.pollingInterval * 1000) || 15000
-				)
-			}
+		if (!this.config) return
+
+		// Always clear any existing poller before (re)starting to avoid stacking timers.
+		if (this.polling_interval) {
+			clearInterval(this.polling_interval)
+			this.polling_interval = undefined
 		}
+
+		if (this.config.pollingInterval === 0) {
+			this.log('debug', 'Polling disabled (interval set to 0)')
+			return
+		}
+
+		const intervalMs = Math.ceil(this.config.pollingInterval * 1000) || 15000
+		this.log('debug', `Starting poller with ${intervalMs}ms interval`)
+		this.polling_interval = setInterval(() => {
+			this._lastUpdateSource = 'poll'
+			this.getAllDataFromEventmaster()
+				.then(() => {
+					this.refreshDefinitions()
+				})
+				.catch((err) => {
+					// Guard: a rejected poll must not crash the module.
+					this.log('error', `Poll failed: ${err?.message || err}`)
+				})
+		}, intervalMs)
 	}
 
 	getConfigFields() {
@@ -439,14 +569,14 @@ class BarcoInstance extends InstanceBase {
 				default: false,
 			},
 
-			   {
-				   type: 'number',
-				   id: 'notification_port',
-				   label: 'Notification server port default 3000 (local)',
-				   width: 6,
-				   default: 3000,
-				   isVisible: (config) => !!config.enable_notifications,
-			   },
+			{
+				type: 'number',
+				id: 'notification_port',
+				label: 'Notification server port default 3000 (local)',
+				width: 6,
+				default: 3000,
+				isVisible: (config) => !!config.enable_notifications,
+			},
 			{
 				type: 'textinput',
 				id: 'notification_host',
@@ -490,7 +620,7 @@ class BarcoInstance extends InstanceBase {
 		// Teardown notifications if active
 		try {
 			await this.teardownNotifications()
-		} catch (e) {
+		} catch {
 			// ignore
 		}
 		delete this.eventmaster
@@ -525,7 +655,7 @@ class BarcoInstance extends InstanceBase {
 			const lookupType = selectedSource.id === selectedValue ? 'source id' : 'dropdown index'
 			this.log(
 				'debug',
-				`Source lookup: ${lookupType} ${selectedValue} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`
+				`Source lookup: ${lookupType} ${selectedValue} -> EventMaster ID ${selectedSource.id}, InputCfgIndex ${selectedSource.InputCfgIndex}, StillIndex ${selectedSource.StillIndex} (${selectedSource.Name})`,
 			)
 
 			// Use InputCfgIndex for inputs (>=0), use StillIndex for stills (InputCfgIndex=-1)
@@ -554,7 +684,7 @@ class BarcoInstance extends InstanceBase {
 		if (dropdownIndex >= 0 && dropdownIndex < sources.length) {
 			const selectedSource = sources[dropdownIndex]
 			// 0 = Input (InputCfgIndex >= 0), 1 = Still (InputCfgIndex = -1)
-			return (selectedSource.InputCfgIndex !== undefined && selectedSource.InputCfgIndex >= 0) ? 0 : 1
+			return selectedSource.InputCfgIndex !== undefined && selectedSource.InputCfgIndex >= 0 ? 0 : 1
 		}
 		return 0 // Default to Input if not found
 	}
@@ -571,8 +701,8 @@ class BarcoInstance extends InstanceBase {
 						}
 					})
 				})
-				this.eventmasterData.presets = this.convertArrayToObject(res.response, 'presetSno')
-				
+				this.eventmasterData.presets = this.convertArrayToObject(res?.response, 'presetSno')
+
 				// Update variables to include new preset names
 				this.updateDestinationVariables()
 			} catch (err) {
@@ -590,8 +720,8 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				this.eventmasterData.sources = this.convertArrayToObject(res.response, 'Name')
-				
+				this.eventmasterData.sources = this.convertArrayToObject(res?.response, 'Name')
+
 				// // Debug: Show all sources for indexing troubleshooting
 				// this.log('info', '=== ALL SOURCES DEBUG ===')
 				// Object.values(this.eventmasterData.sources).forEach((source, index) => {
@@ -613,7 +743,7 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				this.eventmasterData.cues = this.convertArrayToObject(res.response)
+				this.eventmasterData.cues = this.convertArrayToObject(res?.response)
 			} catch (err) {
 				this.log('error', 'EventMaster Cues Error: ' + err)
 			}
@@ -629,7 +759,7 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				this.eventmasterData.userKeys = this.convertArrayToObject(res.response)
+				this.eventmasterData.userKeys = this.convertArrayToObject(res?.response)
 			} catch (err) {
 				this.log('error', 'EventMaster UserKeys Error: ' + err)
 			}
@@ -645,10 +775,11 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				this.eventmasterData.ScreenDestinations = this.convertArrayToObject(res.response.ScreenDestination, 'Name')
-				this.eventmasterData.AuxDestinations = this.convertArrayToObject(res.response.AuxDestination, 'Name')
-				this.eventmasterData.SuperDestinations = this.convertArrayToObject(res.response.SuperDestination, 'Name')
-				this.eventmasterData.SuperAuxDestinations = this.convertArrayToObject(res.response.SuperAux, 'Name')
+				const response = res?.response || {}
+				this.eventmasterData.ScreenDestinations = this.convertArrayToObject(response.ScreenDestination, 'Name')
+				this.eventmasterData.AuxDestinations = this.convertArrayToObject(response.AuxDestination, 'Name')
+				this.eventmasterData.SuperDestinations = this.convertArrayToObject(response.SuperDestination, 'Name')
+				this.eventmasterData.SuperAuxDestinations = this.convertArrayToObject(response.SuperAux, 'Name')
 			} catch (err) {
 				this.log('error', 'EventMaster Destinations Error: ' + err)
 			}
@@ -664,12 +795,21 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				const key = Object.keys(res.response)[0]
-				const powerVariables = {
-					power_status1: this.powerStatus[parseInt(res.response[key].PowerSupply1Status)],
-					power_status2: this.powerStatus[parseInt(res.response[key].PowerSupply2Status)],
+				if (!res || !res.response || typeof res.response !== 'object') {
+					this.log('warn', 'Power status response missing or malformed, skipping')
+					return
 				}
-				
+				const key = Object.keys(res.response)[0]
+				const powerData = key !== undefined ? res.response[key] : undefined
+				if (!powerData) {
+					this.log('warn', 'Power status response contained no power supply data, skipping')
+					return
+				}
+				const powerVariables = {
+					power_status1: this.powerStatus[parseInt(powerData.PowerSupply1Status)] || 'Unknown',
+					power_status2: this.powerStatus[parseInt(powerData.PowerSupply2Status)] || 'Unknown',
+				}
+
 				// Apply change tracking for power status variables
 				const changedPowerVariables = {}
 				Object.entries(powerVariables).forEach(([key, value]) => {
@@ -678,7 +818,7 @@ class BarcoInstance extends InstanceBase {
 						this.previousVariableValues[key] = value
 					}
 				})
-				
+
 				if (Object.keys(changedPowerVariables).length > 0) {
 					this.setVariableValues(changedPowerVariables)
 				}
@@ -689,7 +829,7 @@ class BarcoInstance extends InstanceBase {
 	}
 
 	async getAllDataFromEventmaster() {
-		console.log('Fetching all data from EventMaster...')
+		this.log('debug', `Fetching all data from EventMaster (source: ${this._lastUpdateSource || 'init'})`)
 		await this.getFrameSettings()
 		await this.getPresetsFromEventmaster()
 		await this.getSourcesFromEventmaster()
@@ -697,7 +837,7 @@ class BarcoInstance extends InstanceBase {
 		await this.getDestinationsFromEventmaster()
 		await this.getUserKeysFromEventmaster()
 		await this.getPowerStatusFromEventmaster()
-		
+
 		// Update variable definitions to include destination content variables
 		this.updateDestinationVariables()
 	}
@@ -707,69 +847,70 @@ class BarcoInstance extends InstanceBase {
 	 */
 	updateDestinationVariables() {
 		// Start with frame variables (if available) or default variables
-		const variables = this.frameVariableDefinitions.length > 0 
-			? [...this.frameVariableDefinitions] 
-			: [
-				{ variableId: 'frame_IP', name: 'Frame IP Address' },
-				{ variableId: 'frame_MAC', name: 'Frame MAC Address' },
-				{ variableId: 'frame_version', name: 'Frame Version' },
-				{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
-				{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
-				{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
-			]
+		const variables =
+			this.frameVariableDefinitions.length > 0
+				? [...this.frameVariableDefinitions]
+				: [
+						{ variableId: 'frame_IP', name: 'Frame IP Address' },
+						{ variableId: 'frame_MAC', name: 'Frame MAC Address' },
+						{ variableId: 'frame_version', name: 'Frame Version' },
+						{ variableId: 'frame_OSVersion', name: 'Frame OS Version' },
+						{ variableId: 'power_status1', name: 'Power Supply 1 Status' },
+						{ variableId: 'power_status2', name: 'Power Supply 2 Status' },
+					]
 
 		// Add source monitoring variables - show which destinations each source is active on
 		if (this.eventmasterData && this.eventmasterData.sources) {
-			Object.values(this.eventmasterData.sources).forEach(source => {
-				variables.push({ 
-					variableId: `source_${source.id + 1}_name`, 
-					name: `Source ${source.id + 1} Name` 
+			Object.values(this.eventmasterData.sources).forEach((source) => {
+				variables.push({
+					variableId: `source_${source.id + 1}_name`,
+					name: `Source ${source.id + 1} Name`,
 				})
-				variables.push({ 
-					variableId: `source_${source.id + 1}_pgm_destinations`, 
-					name: `${source.Name} - PGM Destinations` 
+				variables.push({
+					variableId: `source_${source.id + 1}_pgm_destinations`,
+					name: `${source.Name} - PGM Destinations`,
 				})
-				variables.push({ 
-					variableId: `source_${source.id + 1}_pvw_destinations`, 
-					name: `${source.Name} - PVW Destinations` 
+				variables.push({
+					variableId: `source_${source.id + 1}_pvw_destinations`,
+					name: `${source.Name} - PVW Destinations`,
 				})
-				variables.push({ 
-					variableId: `source_${source.id + 1}_is_active`, 
-					name: `${source.Name} - Is Active (PGM or PVW)` 
+				variables.push({
+					variableId: `source_${source.id + 1}_is_active`,
+					name: `${source.Name} - Is Active (PGM or PVW)`,
 				})
 			})
 		}
 
 		// Add preset name variables
 		if (this.eventmasterData && this.eventmasterData.presets) {
-			Object.values(this.eventmasterData.presets).forEach(preset => {
-				variables.push({ 
-					variableId: `preset_${preset.id}_name`, 
-					name: `Preset ${preset.presetSno || preset.id} Name` 
+			Object.values(this.eventmasterData.presets).forEach((preset) => {
+				variables.push({
+					variableId: `preset_${preset.id}_name`,
+					name: `Preset ${preset.presetSno || preset.id} Name`,
 				})
-				variables.push({ 
-					variableId: `preset_${preset.id}_number`, 
-					name: `Preset ${preset.presetSno || preset.id} Number` 
+				variables.push({
+					variableId: `preset_${preset.id}_number`,
+					name: `Preset ${preset.presetSno || preset.id} Number`,
 				})
 			})
 		}
 
 		// Add screen destination name variables
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
-			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
-				variables.push({ 
-					variableId: `screen_${screen.id}_name`, 
-					name: `Screen ${screen.id} Name` 
+			Object.values(this.eventmasterData.ScreenDestinations).forEach((screen) => {
+				variables.push({
+					variableId: `screen_${screen.id}_name`,
+					name: `Screen ${screen.id} Name`,
 				})
 			})
 		}
 
 		// Add AUX destination name variables
 		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
-			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
-				variables.push({ 
-					variableId: `aux_${aux.id}_name`, 
-					name: `AUX ${aux.id} Name` 
+			Object.values(this.eventmasterData.AuxDestinations).forEach((aux) => {
+				variables.push({
+					variableId: `aux_${aux.id}_name`,
+					name: `AUX ${aux.id} Name`,
 				})
 			})
 		}
@@ -779,14 +920,18 @@ class BarcoInstance extends InstanceBase {
 		if (this.lastVariableDefinitionsHash !== variableDefinitionsHash) {
 			this.log('debug', 'Variable definitions changed, updating...')
 			this.setVariableDefinitions(variables)
-			
+
 			// Clear variable tracking only when definitions actually change
 			this.previousVariableValues = {}
 			this.lastVariableDefinitionsHash = variableDefinitionsHash
 		}
-		
-		// Auto-populate source monitoring variables
-		this.autoPopulateSourceMonitoring()
+
+		// Auto-populate source monitoring variables.
+		// Fire-and-forget, but guard the rejection so it can never become an
+		// unhandled promise rejection that crashes the module.
+		this.autoPopulateSourceMonitoring().catch((err) =>
+			this.log('error', `Source monitoring update failed: ${err?.message || err}`),
+		)
 	}
 
 	/**
@@ -796,63 +941,59 @@ class BarcoInstance extends InstanceBase {
 	async autoPopulateSourceMonitoring() {
 		// Check if EventMaster is connected
 		if (!this.eventmaster) {
-			this.log('warning', 'EventMaster not connected, skipping source monitoring')
+			this.log('warn', 'EventMaster not connected, skipping source monitoring')
 			return
 		}
-		
+
 		// Initialize or retrieve previous variable values for change tracking
 		if (!this.previousVariableValues) {
 			this.previousVariableValues = {}
 		}
-		
-
 
 		// Initialize source tracking objects and clear any previous data
 		const sourcePgmDestinations = {}
 		const sourcePvwDestinations = {}
 		// Always clear all previous destination arrays for all known sources
 		if (this.eventmasterData && this.eventmasterData.sources) {
-			Object.values(this.eventmasterData.sources).forEach(source => {
+			Object.values(this.eventmasterData.sources).forEach((source) => {
 				sourcePgmDestinations[source.id] = []
 				sourcePvwDestinations[source.id] = []
 			})
 		} else {
-			this.log('warning', 'No sources available for monitoring')
+			this.log('warn', 'No sources available for monitoring')
 			return
 		}
 
 		// Query all screen destinations to see what sources are active
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
 			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.ScreenDestinations).length} screen destinations...`)
-			
+
 			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
 				try {
-					
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
 							if (err) reject(err)
 							else resolve(result)
 						})
 					})
-					
+
 					if (res && res.response) {
 						const content = res.response
 
-						
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
 							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
-							
-							const pgmBgLayer = content.BGLyr.find(layer => layer.id === 0)
+
+							const pgmBgLayer = content.BGLyr.find((layer) => layer.id === 0)
 							if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined && pgmBgLayer.LastBGSourceIndex !== -1) {
 								const sourceId = pgmBgLayer.LastBGSourceIndex
 								if (sourcePgmDestinations[sourceId]) {
 									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
 								}
 							}
-							
+
 							// Check for PVW background (id 1 = PVW background)
-							const pvwBgLayer = content.BGLyr.find(layer => layer.id === 1)
+							const pvwBgLayer = content.BGLyr.find((layer) => layer.id === 1)
 							if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined && pvwBgLayer.LastBGSourceIndex !== -1) {
 								const sourceId = pvwBgLayer.LastBGSourceIndex
 								if (sourcePvwDestinations[sourceId]) {
@@ -860,32 +1001,40 @@ class BarcoInstance extends InstanceBase {
 								}
 							}
 						}
-						
+
 						// Check active layers
 						if (content.Layers && content.Layers.length > 0) {
-							content.Layers.forEach(layer => {
+							content.Layers.forEach((layer) => {
 								// Check if layer is on PGM
-								if (layer.PgmMode !== undefined && layer.PgmMode > 0 && 
-									layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1 && 
-									layer.Freeze !== undefined && layer.Freeze === 0) {
-									
+								if (
+									layer.PgmMode !== undefined &&
+									layer.PgmMode > 0 &&
+									layer.LastSrcIdx !== undefined &&
+									layer.LastSrcIdx !== -1 &&
+									layer.Freeze !== undefined &&
+									layer.Freeze === 0
+								) {
 									const sourceId = layer.LastSrcIdx
 									if (sourcePgmDestinations[sourceId]) {
 										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
 									}
 								}
-								
+
 								// Check if layer is on PVW
-								if (layer.PvwMode !== undefined && layer.PvwMode > 0 && 
-									layer.LastSrcIdx !== undefined && layer.LastSrcIdx !== -1 && 
-									layer.Freeze !== undefined && layer.Freeze === 0) {
-									
+								if (
+									layer.PvwMode !== undefined &&
+									layer.PvwMode > 0 &&
+									layer.LastSrcIdx !== undefined &&
+									layer.LastSrcIdx !== -1 &&
+									layer.Freeze !== undefined &&
+									layer.Freeze === 0
+								) {
 									const sourceId = layer.LastSrcIdx
 									if (sourcePvwDestinations[sourceId]) {
 										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
 									}
 								}
-								
+
 								// Only log inactive layers if you need detailed debugging
 								// if ((layer.PgmMode === 0 && layer.PvwMode === 0) || layer.Freeze > 0) {
 								//     this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: INACTIVE (PgmMode: ${layer.PgmMode}, PvwMode: ${layer.PvwMode}, Freeze: ${layer.Freeze}) - Source: ${layer.SrcIdx + 1}`)
@@ -893,7 +1042,7 @@ class BarcoInstance extends InstanceBase {
 							})
 						}
 					} else {
-						this.log('warning', `No response data for screen destination ${dest.id}`)
+						this.log('warn', `No response data for screen destination ${dest.id}`)
 					}
 				} catch (err) {
 					this.log('error', `Could not get content for screen destination ${dest.id}: ${err}`)
@@ -904,22 +1053,22 @@ class BarcoInstance extends InstanceBase {
 		// Query all AUX destinations
 		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
 			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.AuxDestinations).length} AUX destinations...`)
-			
+
 			for (const dest of Object.values(this.eventmasterData.AuxDestinations)) {
 				try {
 					// this.log('debug', `Querying AUX destination ${dest.id} (${dest.Name})...`)
-					
+
 					const res = await new Promise((resolve, reject) => {
 						this.eventmaster.listAuxContent(parseInt(dest.id), (err, result) => {
 							if (err) reject(err)
 							else resolve(result)
 						})
 					})
-					
+
 					if (res && res.response) {
 						const auxContent = res.response
 						// this.log('debug', `AUX ${dest.id} content structure: ${JSON.stringify(Object.keys(auxContent))}`)
-						
+
 						// Check PGM source
 						if (auxContent.PgmLastSrcIndex !== undefined) {
 							const sourceId = auxContent.PgmLastSrcIndex
@@ -928,7 +1077,7 @@ class BarcoInstance extends InstanceBase {
 								// this.log('debug', `AUX ${dest.Name}: PGM = Source ${sourceId}`)
 							}
 						}
-						
+
 						// Check PVW source
 						if (auxContent.PvwLastSrcIndex !== undefined) {
 							const sourceId = auxContent.PvwLastSrcIndex
@@ -938,7 +1087,7 @@ class BarcoInstance extends InstanceBase {
 							}
 						}
 					} else {
-						this.log('warning', `No response data for AUX destination ${dest.id}`)
+						this.log('warn', `No response data for AUX destination ${dest.id}`)
 					}
 				} catch (err) {
 					this.log('error', `Could not get content for AUX destination ${dest.id}: ${err}`)
@@ -947,59 +1096,54 @@ class BarcoInstance extends InstanceBase {
 		}
 
 		// Set variable values for all sources
-		const variableValues = {}
 		const changedVariables = {}
 		let activeSources = 0
-		
-		   if (this.eventmasterData && this.eventmasterData.sources) {
-			   Object.values(this.eventmasterData.sources).forEach(source => {
-				   const pgmDestsRaw = sourcePgmDestinations[source.id] || []
-				   const pvwDestsRaw = sourcePvwDestinations[source.id] || []
-				   const pgmDests = pgmDestsRaw.filter(dest => dest && !dest.includes('background'))
-				   const pvwDests = pvwDestsRaw.filter(dest => dest && !dest.includes('background'))
-				   let feedbackColor = undefined
-				   if (pgmDests.length > 0) {
-					   feedbackColor = 'red'
-				   } else if (pvwDests.length > 0) {
-					   feedbackColor = 'green'
-				   } else {
-					   feedbackColor = undefined
-				   }
-				   const isActive = (pgmDests.length > 0 || pvwDests.length > 0)
-				   const newValues = {
-					   [`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
-					   [`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 
-						   ? pgmDests.join(', ') 
-						   : 'Not active on PGM',
-					   [`source_${source.id + 1}_pvw_destinations`]: pvwDests.length > 0 
-						   ? pvwDests.join(', ') 
-						   : 'Not active on PVW',
-					   [`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No',
-					   [`source_${source.id + 1}_tally`]: feedbackColor
-				   }
 
-				   // Check for changes and only add changed variables
-				   Object.entries(newValues).forEach(([key, value]) => {
-					   if (this.previousVariableValues[key] !== value) {
-						   changedVariables[key] = value
-						   this.previousVariableValues[key] = value
-					   }
-				   })
+		if (this.eventmasterData && this.eventmasterData.sources) {
+			Object.values(this.eventmasterData.sources).forEach((source) => {
+				const pgmDestsRaw = sourcePgmDestinations[source.id] || []
+				const pvwDestsRaw = sourcePvwDestinations[source.id] || []
+				const pgmDests = pgmDestsRaw.filter((dest) => dest && !dest.includes('background'))
+				const pvwDests = pvwDestsRaw.filter((dest) => dest && !dest.includes('background'))
+				let feedbackColor = undefined
+				if (pgmDests.length > 0) {
+					feedbackColor = 'red'
+				} else if (pvwDests.length > 0) {
+					feedbackColor = 'green'
+				} else {
+					feedbackColor = undefined
+				}
+				const isActive = pgmDests.length > 0 || pvwDests.length > 0
+				const newValues = {
+					[`source_${source.id + 1}_name`]: source.Name || `Source ${source.id + 1}`,
+					[`source_${source.id + 1}_pgm_destinations`]: pgmDests.length > 0 ? pgmDests.join(', ') : 'Not active on PGM',
+					[`source_${source.id + 1}_pvw_destinations`]: pvwDests.length > 0 ? pvwDests.join(', ') : 'Not active on PVW',
+					[`source_${source.id + 1}_is_active`]: isActive ? 'Yes' : 'No',
+					[`source_${source.id + 1}_tally`]: feedbackColor,
+				}
 
-				   if (pgmDests.length > 0 || pvwDests.length > 0) {
-					   activeSources++
-				   }
-			   })
-		   }
-		
+				// Check for changes and only add changed variables
+				Object.entries(newValues).forEach(([key, value]) => {
+					if (this.previousVariableValues[key] !== value) {
+						changedVariables[key] = value
+						this.previousVariableValues[key] = value
+					}
+				})
+
+				if (pgmDests.length > 0 || pvwDests.length > 0) {
+					activeSources++
+				}
+			})
+		}
+
 		// Set preset name variables
 		if (this.eventmasterData && this.eventmasterData.presets) {
-			Object.values(this.eventmasterData.presets).forEach(preset => {
+			Object.values(this.eventmasterData.presets).forEach((preset) => {
 				const newValues = {
 					[`preset_${preset.id}_name`]: preset.Name ? _.unescape(preset.Name) : `Preset ${preset.id}`,
-					[`preset_${preset.id}_number`]: preset.presetSno || preset.id || '?'
+					[`preset_${preset.id}_number`]: preset.presetSno || preset.id || '?',
 				}
-				
+
 				// Check for changes and only add changed variables
 				Object.entries(newValues).forEach(([key, value]) => {
 					if (this.previousVariableValues[key] !== value) {
@@ -1012,10 +1156,10 @@ class BarcoInstance extends InstanceBase {
 
 		// Set screen destination name variables
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
-			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
+			Object.values(this.eventmasterData.ScreenDestinations).forEach((screen) => {
 				const key = `screen_${screen.id}_name`
 				const value = screen.Name || `Screen ${screen.id}`
-				
+
 				if (this.previousVariableValues[key] !== value) {
 					changedVariables[key] = value
 					this.previousVariableValues[key] = value
@@ -1025,17 +1169,17 @@ class BarcoInstance extends InstanceBase {
 
 		// Set AUX destination name variables
 		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
-			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
+			Object.values(this.eventmasterData.AuxDestinations).forEach((aux) => {
 				const key = `aux_${aux.id}_name`
 				const value = aux.Name || `AUX ${aux.id}`
-				
+
 				if (this.previousVariableValues[key] !== value) {
 					changedVariables[key] = value
 					this.previousVariableValues[key] = value
 				}
 			})
 		}
-		
+
 		// Only update variables if there are actual changes
 		if (Object.keys(changedVariables).length > 0) {
 			this.setVariableValues(changedVariables)
@@ -1043,12 +1187,12 @@ class BarcoInstance extends InstanceBase {
 		} else {
 			this.log('debug', 'No variable changes detected, skipping update')
 		}
-		
+
 		// Update feedbacks to reflect current source activity
 		this.checkFeedbacks()
-		
+
 		// Only log if there are actually active sources or it's been a while
-		if (activeSources > 0 || !this._lastLogTime || (Date.now() - this._lastLogTime) > 60000) {
+		if (activeSources > 0 || !this._lastLogTime || Date.now() - this._lastLogTime > 60000) {
 			this.log('debug', `Source monitoring updated: ${activeSources} sources have active destinations`)
 			this._lastLogTime = Date.now()
 		}
@@ -1061,7 +1205,7 @@ class BarcoInstance extends InstanceBase {
 	 */
 	findSourceNameById(sourceId) {
 		if (this.eventmasterData && this.eventmasterData.sources) {
-			const source = Object.values(this.eventmasterData.sources).find(src => src.id === sourceId)
+			const source = Object.values(this.eventmasterData.sources).find((src) => src.id === sourceId)
 			if (source) {
 				return source.Name
 			}
@@ -1073,13 +1217,13 @@ class BarcoInstance extends InstanceBase {
 		const actions = {}
 
 		const CHOICES_PRESETS = Object.values(this.eventmasterData.presets)
-			.sort((a, b) => (a.presetSno || a.id) - (b.presetSno || b.id))  // Sort by presetSno (GUI order)
+			.sort((a, b) => (a.presetSno || a.id) - (b.presetSno || b.id)) // Sort by presetSno (GUI order)
 			.map((preset) => ({
 				label: `${preset.presetSno || preset.id} ${_.unescape(preset.Name)}`,
 				id: preset.id,
 			}))
-		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source, index) => {
-			const sourceType = (source.InputCfgIndex !== undefined && source.InputCfgIndex >= 0) ? 'Input' : 'Still'
+		const CHOICES_SOURCES = Object.values(this.eventmasterData.sources).map((source) => {
+			const sourceType = source.InputCfgIndex !== undefined && source.InputCfgIndex >= 0 ? 'Input' : 'Still'
 			return {
 				label: `${source.Name} (${sourceType})`,
 				id: source.id, // Use the actual EventMaster source ID directly
@@ -1094,13 +1238,13 @@ class BarcoInstance extends InstanceBase {
 			id: key.id,
 		}))
 		const CHOICES_SCREENDESTINATIONS = Object.values(this.eventmasterData.ScreenDestinations)
-			.sort((a, b) => a.id - b.id)  // Sort by ID to ensure consistent ordering
+			.sort((a, b) => a.id - b.id) // Sort by ID to ensure consistent ordering
 			.map((dest) => ({
 				label: dest.Name,
 				id: dest.id,
 			}))
 		const CHOICES_AUXDESTINATIONS = Object.values(this.eventmasterData.AuxDestinations)
-			.sort((a, b) => a.id - b.id)  // Sort by ID to ensure consistent ordering
+			.sort((a, b) => a.id - b.id) // Sort by ID to ensure consistent ordering
 			.map((dest) => ({
 				label: dest.Name,
 				id: dest.id,
@@ -1141,7 +1285,7 @@ class BarcoInstance extends InstanceBase {
 					...(this.getAuthType() === 'operator' ? { operatorId: this.getAuthValue() } : {}),
 					...(this.getAuthType() === 'super_user' ? { password: this.getAuthValue() } : {}),
 				}
-				console.log('Recalling Preset with params:', params)
+				this.log('debug', `Recalling Preset with params: ${JSON.stringify(params)}`)
 				this.eventmaster.activatePresetById(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'recall preset response: ' + JSON.stringify(res))
@@ -1290,7 +1434,7 @@ class BarcoInstance extends InstanceBase {
 			callback: (action) => {
 				// Use the selected source ID directly (it's now the actual EventMaster source ID)
 				const sourceId = parseInt(action.options.frzSource)
-				
+
 				const params = {
 					type: 0, // 0 type is source
 					id: sourceId,
@@ -1353,22 +1497,14 @@ class BarcoInstance extends InstanceBase {
 					type: 'dropdown',
 					label: 'Preview Source',
 					id: 'pvwSource',
-					choices: [
-						{ id: '', label: 'No Change' }, 
-						{ id: -1, label: 'Clear Source' },
-						...CHOICES_SOURCES
-					],
+					choices: [{ id: '', label: 'No Change' }, { id: -1, label: 'Clear Source' }, ...CHOICES_SOURCES],
 					default: '',
 				},
 				{
 					type: 'dropdown',
 					label: 'Program Source',
 					id: 'pgmSource',
-					choices: [
-						{ id: '', label: 'No Change' }, 
-						{ id: -1, label: 'Clear Source' },
-						...CHOICES_SOURCES
-					],
+					choices: [{ id: '', label: 'No Change' }, { id: -1, label: 'Clear Source' }, ...CHOICES_SOURCES],
 					default: '',
 				},
 				{
@@ -1571,7 +1707,7 @@ class BarcoInstance extends InstanceBase {
 				// Program background (id: 0)
 				if (action.options.pgmBgSource !== undefined && action.options.pgmBgSource !== '') {
 					const pgmBgSourceId = this.getActualSourceId(parseInt(action.options.pgmBgSource))
-					
+
 					bgLayers.push({
 						id: 0,
 						LastBGSourceIndex: pgmBgSourceId,
@@ -1584,7 +1720,7 @@ class BarcoInstance extends InstanceBase {
 				// Preview background (id: 1)
 				if (action.options.pvwBgSource !== undefined && action.options.pvwBgSource !== '') {
 					const pvwBgSourceId = this.getActualSourceId(parseInt(action.options.pvwBgSource))
-					
+
 					bgLayers.push({
 						id: 1,
 						LastBGSourceIndex: pvwBgSourceId,
@@ -1601,9 +1737,12 @@ class BarcoInstance extends InstanceBase {
 				// Build layer configuration if layer settings are specified
 				if (
 					action.options.layerId !== '' &&
-					(action.options.layerSource !== '' || action.options.layerMode !== '' || 
-					 action.options.winHPos !== '' || action.options.winVPos !== '' ||
-					 action.options.winHSize !== '' || action.options.winVSize !== '')
+					(action.options.layerSource !== '' ||
+						action.options.layerMode !== '' ||
+						action.options.winHPos !== '' ||
+						action.options.winVPos !== '' ||
+						action.options.winHSize !== '' ||
+						action.options.winVSize !== '')
 				) {
 					const layer = {
 						id: parseInt(action.options.layerId) || 0,
@@ -1635,8 +1774,10 @@ class BarcoInstance extends InstanceBase {
 
 					// Set window properties if any are specified
 					if (
-						action.options.winHPos !== '' || action.options.winVPos !== '' ||
-						action.options.winHSize !== '' || action.options.winVSize !== ''
+						action.options.winHPos !== '' ||
+						action.options.winVPos !== '' ||
+						action.options.winHSize !== '' ||
+						action.options.winVSize !== ''
 					) {
 						layer.Window = {
 							HPos: action.options.winHPos !== '' ? parseInt(action.options.winHPos) : 0,
@@ -1981,37 +2122,37 @@ class BarcoInstance extends InstanceBase {
 		// 			if (err) this.log('error', 'EventMaster Error: ' + err)
 		// 			else {
 		// 				console.log('Frame Settings Action Response:', JSON.stringify(res, null, 2))
-		// 				
+		//
 		// 				// Parse the correct structure
 		// 				let frameData = null
 		// 				if (res.response && res.response.System && res.response.System.FrameCollection && res.response.System.FrameCollection.Frame) {
 		// 					// Frame is a single object, not an array
 		// 					frameData = res.response.System.FrameCollection.Frame
 		// 				}
-		// 				
+		//
 		// 				if (frameData) {
 		// 					const frameIP = frameData.Enet?.IP || this.config.host || 'Unknown'
 		// 					const version = frameData.Version || 'Unknown'
 		// 					const osVersion = frameData.OSVersion || 'Unknown'
-		// 					
+		//
 		// 					this.eventmasterData.frameIP = frameIP
 		// 					this.eventmasterData.version = version
 		// 					this.eventmasterData.OSVersion = osVersion
-		// 					
+		//
 		// 					// Start with basic variables
 		// 					const variableValues = {
 		// 						frame_IP: frameIP,
 		// 						frame_version: version,
 		// 						frame_OSVersion: osVersion,
 		// 					}
-		// 					
+		//
 		// 					// Process card slots if they exist
 		// 					if (frameData.Slot && Array.isArray(frameData.Slot)) {
 		// 						frameData.Slot.forEach((slot, index) => {
 		// 							if (slot.Card) {
 		// 								const slotNum = index + 1
 		// 								const card = slot.Card
-		// 								
+		//
 		// 								// Build health status
 		// 								let healthStatus = 'OK'
 		// 								if (card.OverTemp === 1 && card.FanWarn === 1) {
@@ -2021,14 +2162,14 @@ class BarcoInstance extends InstanceBase {
 		// 								} else if (card.FanWarn === 1) {
 		// 									healthStatus = 'Fan Warning'
 		// 								}
-		// 								
+		//
 		// 								// Combine all card info into a single string
 		// 								const cardInfo = `${card.CardTypeLabel || 'Unknown'} - Status: ${card.CardStatusLabel || 'Unknown'} - Temp/Fan: ${healthStatus}`
 		// 								variableValues[`card${slotNum}_info`] = cardInfo
 		// 							}
 		// 						})
 		// 					}
-		// 					
+		//
 		// 					// Add SysCard information if available
 		// 					if (frameData.SysCard) {
 		// 						let sysHealthStatus = 'OK'
@@ -2039,13 +2180,13 @@ class BarcoInstance extends InstanceBase {
 		// 						} else if (frameData.SysCard.FanWarn === 1) {
 		// 							sysHealthStatus = 'Fan Warning'
 		// 						}
-		// 						
+		//
 		// 						const sysCardInfo = `${frameData.SysCard.CardTypeLabel || 'Unknown'} - Status: ${frameData.SysCard.CardStatusLabel || 'Unknown'} - Temp/Fan: ${sysHealthStatus}`
 		// 						variableValues.syscard_info = sysCardInfo
 		// 					}
-		// 					
+		//
 		// 					this.setVariableValues(variableValues)
-		// 					
+		//
 		// 					this.log('debug', `Frame Settings Action: IP=${frameIP}, Version=${version}, OS=${osVersion}`)
 		// 				}
 		// 			}
@@ -2164,7 +2305,7 @@ class BarcoInstance extends InstanceBase {
 					AuxDestination: [],
 					arm: parseInt(action.options.arm),
 				}
-				console.log('Arm/Unarm Destination with params:', JSON.stringify(params))
+				this.log('debug', `Arm/Unarm Destination with params: ${JSON.stringify(params)}`)
 				this.eventmaster.armUnarmDestination(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
@@ -2199,7 +2340,7 @@ class BarcoInstance extends InstanceBase {
 					AuxDestination: [{ id: parseInt(action.options.auxDestId) }],
 					arm: parseInt(action.options.arm),
 				}
-				console.log('Arm/Unarm AUX Destination with params:', JSON.stringify(params))
+				this.log('debug', `Arm/Unarm AUX Destination with params: ${JSON.stringify(params)}`)
 				this.eventmaster.armUnarmDestination(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
 					else this.log('debug', 'armUnarmAuxDestination response: ' + JSON.stringify(res))
@@ -2309,20 +2450,26 @@ class BarcoInstance extends InstanceBase {
 			],
 			callback: (action) => {
 				// Convert dropdown indices to actual EventMaster source IDs and auto-detect types
-				this.log('debug', `Source Main Backup: Raw options - inputId: ${action.options.inputId}, backup1: ${action.options.backup1SourceId}, backup2: ${action.options.backup2SourceId}, backup3: ${action.options.backup3SourceId}`)
-				
+				this.log(
+					'debug',
+					`Source Main Backup: Raw options - inputId: ${action.options.inputId}, backup1: ${action.options.backup1SourceId}, backup2: ${action.options.backup2SourceId}, backup3: ${action.options.backup3SourceId}`,
+				)
+
 				const inputId = this.getActualSourceId(parseInt(action.options.inputId))
 				const backup1SourceId = this.getActualSourceId(parseInt(action.options.backup1SourceId))
 				const backup2SourceId = this.getActualSourceId(parseInt(action.options.backup2SourceId))
 				const backup3SourceId = this.getActualSourceId(parseInt(action.options.backup3SourceId))
-				
+
 				// Auto-detect source types based on InputCfgIndex
 				const backup1SrcType = this.getSourceType(parseInt(action.options.backup1SourceId))
 				const backup2SrcType = this.getSourceType(parseInt(action.options.backup2SourceId))
 				const backup3SrcType = this.getSourceType(parseInt(action.options.backup3SourceId))
-				
-				this.log('debug', `Source Main Backup: Resolved IDs - inputId: ${inputId}, backup1: ${backup1SourceId} (type ${backup1SrcType}), backup2: ${backup2SourceId} (type ${backup2SrcType}), backup3: ${backup3SourceId} (type ${backup3SrcType})`)
-				
+
+				this.log(
+					'debug',
+					`Source Main Backup: Resolved IDs - inputId: ${inputId}, backup1: ${backup1SourceId} (type ${backup1SrcType}), backup2: ${backup2SourceId} (type ${backup2SrcType}), backup3: ${backup3SourceId} (type ${backup3SrcType})`,
+				)
+
 				const params = {
 					inputId: inputId,
 					Backup1: {
@@ -2361,7 +2508,7 @@ class BarcoInstance extends InstanceBase {
 			callback: (action) => {
 				const dropdownIndex = parseInt(action.options.sourceId)
 				const sourceId = this.getActualSourceId(dropdownIndex)
-				
+
 				const params = {
 					id: sourceId,
 				}
@@ -2377,11 +2524,13 @@ class BarcoInstance extends InstanceBase {
 			name: 'Refresh Source Monitoring',
 			options: [],
 			callback: () => {
-				this.autoPopulateSourceMonitoring().then(() => {
-					this.log('info', 'Source monitoring variables refreshed')
-				}).catch(err => {
-					this.log('error', 'Error refreshing source monitoring: ' + err)
-				})
+				this.autoPopulateSourceMonitoring()
+					.then(() => {
+						this.log('info', 'Source monitoring variables refreshed')
+					})
+					.catch((err) => {
+						this.log('error', 'Error refreshing source monitoring: ' + err)
+					})
 			},
 		}
 
@@ -2402,13 +2551,13 @@ class BarcoInstance extends InstanceBase {
 		// 				this.log('error', 'EventMaster Error: ' + err)
 		// 			} else {
 		// 				this.log('debug', 'listContent response: ' + JSON.stringify(res))
-		// 				
+		//
 		// 				// Display information about this destination
 		// 				if (res && res.response) {
 		// 					const content = res.response
 		// 					let pgmInfo = []
 		// 					let pvwInfo = []
-		// 					
+		//
 		// 					// Check background layers
 		// 					if (content.BGLayers && content.BGLayers.length > 0) {
 		// 						const pgmBgLayer = content.BGLayers.find(layer => layer.id === 0)
@@ -2416,14 +2565,14 @@ class BarcoInstance extends InstanceBase {
 		// 							const sourceName = this.findSourceNameById(pgmBgLayer.LastBGSourceIndex)
 		// 							pgmInfo.push(`Background: ${sourceName}`)
 		// 						}
-		// 						
+		//
 		// 						const pvwBgLayer = content.BGLayers.find(layer => layer.id === 1)
 		// 						if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined) {
 		// 							const sourceName = this.findSourceNameById(pvwBgLayer.LastBGSourceIndex)
 		// 							pvwInfo.push(`Background: ${sourceName}`)
 		// 						}
 		// 					}
-		// 					
+		//
 		// 					// Check active layers
 		// 					if (content.Layers && content.Layers.length > 0) {
 		// 						content.Layers.forEach(layer => {
@@ -2437,13 +2586,13 @@ class BarcoInstance extends InstanceBase {
 		// 							}
 		// 						})
 		// 					}
-		// 					
+		//
 		// 					const pgmSummary = pgmInfo.length > 0 ? pgmInfo.join(', ') : 'No PGM content'
 		// 					const pvwSummary = pvwInfo.length > 0 ? pvwInfo.join(', ') : 'No PVW content'
-		// 					
+		//
 		// 					this.log('info', `Screen ${action.options.screenId} - PGM: ${pgmSummary} | PVW: ${pvwSummary}`)
 		// 				}
-		// 				
+		//
 		// 				// Refresh source monitoring after checking this destination
 		// 				this.autoPopulateSourceMonitoring()
 		// 			}
@@ -2468,26 +2617,26 @@ class BarcoInstance extends InstanceBase {
 		// 				this.log('error', 'EventMaster Error: ' + err)
 		// 			} else {
 		// 				this.log('debug', 'listAuxContent response: ' + JSON.stringify(res))
-		// 				
+		//
 		// 				// Display information about this AUX destination
 		// 				if (res && res.response) {
 		// 					const auxContent = res.response
 		// 					let pgmSourceInfo = 'No PGM source'
 		// 					let pvwSourceInfo = 'No PVW source'
-		// 					
+		//
 		// 					if (auxContent.PgmLastSrcIndex !== undefined) {
 		// 						const sourceName = this.findSourceNameById(auxContent.PgmLastSrcIndex)
 		// 						pgmSourceInfo = `${sourceName} (ID: ${auxContent.PgmLastSrcIndex})`
 		// 					}
-		// 					
+		//
 		// 					if (auxContent.PvwLastSrcIndex !== undefined) {
 		// 						const sourceName = this.findSourceNameById(auxContent.PvwLastSrcIndex)
 		// 						pvwSourceInfo = `${sourceName} (ID: ${auxContent.PvwLastSrcIndex})`
 		// 					}
-		// 					
+		//
 		// 					this.log('info', `AUX ${action.options.auxId} - PGM: ${pgmSourceInfo} | PVW: ${pvwSourceInfo}`)
 		// 				}
-		// 				
+		//
 		// 				// Refresh source monitoring after checking this destination
 		// 				this.autoPopulateSourceMonitoring()
 		// 			}
@@ -2510,22 +2659,22 @@ class BarcoInstance extends InstanceBase {
 
 		// Add screen destinations
 		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
-			Object.values(this.eventmasterData.ScreenDestinations).forEach(screen => {
+			Object.values(this.eventmasterData.ScreenDestinations).forEach((screen) => {
 				destinationChoices.push(
 					{ id: `screen_${screen.id}_pgm`, label: `${screen.Name} PGM` },
 					{ id: `screen_${screen.id}_pvw`, label: `${screen.Name} PVW` },
-					{ id: `screen_${screen.id}`, label: `${screen.Name} (PGM or PVW)` }
+					{ id: `screen_${screen.id}`, label: `${screen.Name} (PGM or PVW)` },
 				)
 			})
 		}
 
 		// Add AUX destinations
 		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
-			Object.values(this.eventmasterData.AuxDestinations).forEach(aux => {
+			Object.values(this.eventmasterData.AuxDestinations).forEach((aux) => {
 				destinationChoices.push(
 					{ id: `aux_${aux.id}_pgm`, label: `AUX ${aux.Name} PGM` },
 					{ id: `aux_${aux.id}_pvw`, label: `AUX ${aux.Name} PVW` },
-					{ id: `aux_${aux.id}`, label: `AUX ${aux.Name} (PGM or PVW)` }
+					{ id: `aux_${aux.id}`, label: `AUX ${aux.Name} (PGM or PVW)` },
 				)
 			})
 		}
@@ -2533,10 +2682,10 @@ class BarcoInstance extends InstanceBase {
 		// Create source choices for the feedback options
 		const sourceChoices = []
 		if (this.eventmasterData && this.eventmasterData.sources) {
-			Object.values(this.eventmasterData.sources).forEach(source => {
+			Object.values(this.eventmasterData.sources).forEach((source) => {
 				sourceChoices.push({
 					id: source.id + 1, // Convert to 1-based for display
-					label: `${source.id + 1}: ${source.Name}`
+					label: `${source.id + 1}: ${source.Name}`,
 				})
 			})
 		}
@@ -2548,7 +2697,7 @@ class BarcoInstance extends InstanceBase {
 			description: 'Simple indicator if source is active anywhere, with tally state',
 			defaultStyle: {
 				bgcolor: 16711680, // Red background when active (0xFF0000)
-				color: 16777215 // White text (0xFFFFFF)
+				color: 16777215, // White text (0xFFFFFF)
 			},
 			options: [
 				{
@@ -2556,7 +2705,7 @@ class BarcoInstance extends InstanceBase {
 					label: 'Source',
 					id: 'source',
 					choices: sourceChoices,
-					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1
+					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1,
 				},
 				{
 					type: 'dropdown',
@@ -2564,10 +2713,10 @@ class BarcoInstance extends InstanceBase {
 					id: 'tallyState',
 					choices: [
 						{ id: 'pgm', label: 'Program' },
-						{ id: 'pvw', label: 'Preview' }
+						{ id: 'pvw', label: 'Preview' },
 					],
-					default: 'pgm'
-				}
+					default: 'pgm',
+				},
 			],
 			callback: (feedback) => {
 				const sourceNumber = parseInt(feedback.options.source)
@@ -2580,7 +2729,7 @@ class BarcoInstance extends InstanceBase {
 					return pvwActive && pvwActive !== 'Not active on PVW'
 				}
 				return false
-			}
+			},
 		}
 
 		// Configurable source active feedback
@@ -2590,7 +2739,7 @@ class BarcoInstance extends InstanceBase {
 			description: 'Indicates if the selected source is active on the selected destinations and tally state',
 			defaultStyle: {
 				bgcolor: 16711680, // Red background when active (0xFF0000)
-				color: 16777215 // White text (0xFFFFFF)
+				color: 16777215, // White text (0xFFFFFF)
 			},
 			options: [
 				{
@@ -2598,14 +2747,14 @@ class BarcoInstance extends InstanceBase {
 					label: 'Source',
 					id: 'source',
 					choices: sourceChoices,
-					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1
+					default: sourceChoices.length > 0 ? sourceChoices[0].id : 1,
 				},
 				{
 					type: 'multidropdown',
 					label: 'Monitor Destinations',
 					id: 'destinations',
 					choices: destinationChoices,
-					default: ['anywhere']
+					default: ['anywhere'],
 				},
 				{
 					type: 'dropdown',
@@ -2615,8 +2764,8 @@ class BarcoInstance extends InstanceBase {
 						{ id: 'pgm', label: 'Program' },
 						{ id: 'pvw', label: 'Preview' },
 					],
-					default: 'pgm'
-				}
+					default: 'pgm',
+				},
 			],
 			callback: (feedback) => {
 				const sourceNumber = parseInt(feedback.options.source)
@@ -2624,64 +2773,76 @@ class BarcoInstance extends InstanceBase {
 				const tallyState = feedback.options.tallyState || 'pgm'
 
 				// Get the source monitoring variables
-				   const pgmDestinations = (this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || '').split(',').map(s => s.trim()).filter(Boolean)
-				   const pvwDestinations = (this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || '').split(',').map(s => s.trim()).filter(Boolean)
+				const pgmDestinations = (this.getVariableValue(`source_${sourceNumber}_pgm_destinations`) || '')
+					.split(',')
+					.map((s) => s.trim())
+					.filter(Boolean)
+				const pvwDestinations = (this.getVariableValue(`source_${sourceNumber}_pvw_destinations`) || '')
+					.split(',')
+					.map((s) => s.trim())
+					.filter(Boolean)
 
-				   for (const dest of destinations) {
-					   if (dest === 'anywhere') {
-						   if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM') return true
-						   if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW') return true
-					   } else if (dest === 'anywhere_pgm') {
-						   if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM') return true
-					   } else if (dest === 'anywhere_pvw') {
-						   if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW') return true
-					   } else if (dest.startsWith('screen_')) {
-						   const parts = dest.split('_')
-						   const screenId = parts[1]
-						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						   const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `${screenId}`
-						   
-						   if (mode === 'pgm' && tallyState === 'pgm') {
-							   // Check for exact screen name match and also check for layer matches (e.g., "Screen LED MAIN L1")
-							   const hasScreenMatch = pgmDestinations.some(pgmDest => 
-								   pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`)
-							   )
-							   if (hasScreenMatch) return true
-						   } else if (mode === 'pvw' && tallyState === 'pvw') {
-							   const hasScreenMatch = pvwDestinations.some(pvwDest => 
-								   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
-							   )
-							   if (hasScreenMatch) return true
-						   } else if (!mode) {
-							   // No specific mode - check both PGM and PVW
-							   const hasScreenMatch = 
-								   (tallyState === 'pgm' && pgmDestinations.some(pgmDest => 
-									   pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`)
-								   )) ||
-								   (tallyState === 'pvw' && pvwDestinations.some(pvwDest => 
-									   pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`)
-								   ))
-							   if (hasScreenMatch) return true
-						   }
-					   } else if (dest.startsWith('aux_')) {
-						   const parts = dest.split('_')
-						   const auxId = parts[1]
-						   const mode = parts[2] // 'pgm', 'pvw', or undefined for both
-						   const auxName = this.eventmasterData?.AuxDestinations?.[auxId]?.Name || `${auxId}`
-						   
-						   if (mode === 'pgm' && tallyState === 'pgm') {
-							   if (pgmDestinations.includes(`AUX ${auxName}`)) return true
-						   } else if (mode === 'pvw' && tallyState === 'pvw') {
-							   if (pvwDestinations.includes(`AUX ${auxName}`)) return true
-						   } else if (!mode) {
-							   // No specific mode - check both PGM and PVW based on current tally state
-							   if (tallyState === 'pgm' && pgmDestinations.includes(`AUX ${auxName}`)) return true
-							   if (tallyState === 'pvw' && pvwDestinations.includes(`AUX ${auxName}`)) return true
-						   }
-					   }
-				   }
-				   return false
-			}
+				for (const dest of destinations) {
+					if (dest === 'anywhere') {
+						if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM')
+							return true
+						if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW')
+							return true
+					} else if (dest === 'anywhere_pgm') {
+						if (tallyState === 'pgm' && pgmDestinations.length > 0 && pgmDestinations[0] !== 'Not active on PGM')
+							return true
+					} else if (dest === 'anywhere_pvw') {
+						if (tallyState === 'pvw' && pvwDestinations.length > 0 && pvwDestinations[0] !== 'Not active on PVW')
+							return true
+					} else if (dest.startsWith('screen_')) {
+						const parts = dest.split('_')
+						const screenId = parts[1]
+						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						const screenName = this.eventmasterData?.ScreenDestinations?.[screenId]?.Name || `${screenId}`
+
+						if (mode === 'pgm' && tallyState === 'pgm') {
+							// Check for exact screen name match and also check for layer matches (e.g., "Screen LED MAIN L1")
+							const hasScreenMatch = pgmDestinations.some(
+								(pgmDest) => pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`),
+							)
+							if (hasScreenMatch) return true
+						} else if (mode === 'pvw' && tallyState === 'pvw') {
+							const hasScreenMatch = pvwDestinations.some(
+								(pvwDest) => pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`),
+							)
+							if (hasScreenMatch) return true
+						} else if (!mode) {
+							// No specific mode - check both PGM and PVW
+							const hasScreenMatch =
+								(tallyState === 'pgm' &&
+									pgmDestinations.some(
+										(pgmDest) => pgmDest === `Screen ${screenName}` || pgmDest.startsWith(`Screen ${screenName} L`),
+									)) ||
+								(tallyState === 'pvw' &&
+									pvwDestinations.some(
+										(pvwDest) => pvwDest === `Screen ${screenName}` || pvwDest.startsWith(`Screen ${screenName} L`),
+									))
+							if (hasScreenMatch) return true
+						}
+					} else if (dest.startsWith('aux_')) {
+						const parts = dest.split('_')
+						const auxId = parts[1]
+						const mode = parts[2] // 'pgm', 'pvw', or undefined for both
+						const auxName = this.eventmasterData?.AuxDestinations?.[auxId]?.Name || `${auxId}`
+
+						if (mode === 'pgm' && tallyState === 'pgm') {
+							if (pgmDestinations.includes(`AUX ${auxName}`)) return true
+						} else if (mode === 'pvw' && tallyState === 'pvw') {
+							if (pvwDestinations.includes(`AUX ${auxName}`)) return true
+						} else if (!mode) {
+							// No specific mode - check both PGM and PVW based on current tally state
+							if (tallyState === 'pgm' && pgmDestinations.includes(`AUX ${auxName}`)) return true
+							if (tallyState === 'pvw' && pvwDestinations.includes(`AUX ${auxName}`)) return true
+						}
+					}
+				}
+				return false
+			},
 		}
 
 		return feedbacks

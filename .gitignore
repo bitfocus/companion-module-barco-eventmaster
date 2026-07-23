@@ -1,14 +1,8 @@
-**/node_modules
+node_modules/
+package-lock.json
 /pkg
-/pkg.tgz
-
-# ignore caches, but keep the release binary and plugins
-.yarn/cache/
-.yarn/build-state.yml
-.yarn/install-state.gz
-
-# EXCEPT these
-!.yarn/releases/
-!.yarn/plugins/
+/*.tgz
+DEBUG-*
+/.yarn
 .DS_Store
 docs/~$ON_RPC_with_EM_processors_Doc_8_2.docx

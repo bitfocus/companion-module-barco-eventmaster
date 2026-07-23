@@ -17,9 +17,7 @@
 			"email": "jeffrey.davidsz@vicreo.eu"
 		}
 	],
-	"legacyIds": [
-		"eventmaster"
-	],
+	"legacyIds": ["eventmaster"],
 	"runtime": {
 		"type": "node18",
 		"api": "nodejs-ipc",
@@ -27,11 +25,6 @@
 		"entrypoint": "../eventmaster.js"
 	},
 	"manufacturer": "Barco",
-	"products": [
-		"Event Master"
-	],
-	"keywords": [
-		"Protocol",
-		"Image Processing"
-	]
+	"products": ["Event Master"],
+	"keywords": ["Protocol", "Image Processing"]
 }
