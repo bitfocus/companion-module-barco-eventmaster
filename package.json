@@ -23,7 +23,7 @@
 		"url": "git+https://github.com/bitfocus/companion-module-barco-eventmaster.git"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^2.7.2",
+		"@companion-module/tools": "^2.8.0",
 		"eslint": "^9.39.5",
 		"prettier": "^3.9.5"
 	},
