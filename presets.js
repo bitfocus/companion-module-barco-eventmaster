@@ -1256,6 +1256,36 @@ module.exports = function getPresets(eventmasterData, _log) {
 			const screen = eventmasterData.ScreenDestinations[key]
 			const screenId = screen.id
 
+			// Arm toggle preset: one button, lit while the frame reports the screen armed
+			presets[`screen_${screenId}_arm_toggle`] = {
+				type: 'button',
+				category: `Arm/Unarm Destinations`,
+				name: `Arm toggle $(eventmaster:screen_${screenId}_name)`,
+				style: {
+					text: `ARM\\n$(eventmaster:screen_${screenId}_name)`,
+					size: '14',
+					color: combineRgb(255, 255, 255),
+					bgcolor: combineRgb(40, 40, 40),
+				},
+				steps: [
+					{
+						down: [{ actionId: 'arm_unarm_destination', options: { destId: screenId, arm: 'toggle' } }],
+						up: [],
+					},
+				],
+				feedbacks: [
+					{
+						feedbackId: 'screen_armed',
+						options: { destId: screenId },
+						style: {
+							text: `ARMED\\n$(eventmaster:screen_${screenId}_name)`,
+							color: combineRgb(0, 0, 0),
+							bgcolor: combineRgb(0, 200, 0),
+						},
+					},
+				],
+			}
+
 			// Arm preset
 			presets[`screen_${screenId}_arm`] = {
 				type: 'button',
@@ -1281,7 +1311,17 @@ module.exports = function getPresets(eventmasterData, _log) {
 						up: [],
 					},
 				],
-				feedbacks: [],
+				feedbacks: [
+					{
+						feedbackId: 'screen_armed',
+						options: { destId: screenId },
+						style: {
+							text: `ARMED\\n$(eventmaster:screen_${screenId}_name)`,
+							color: combineRgb(0, 0, 0),
+							bgcolor: combineRgb(0, 200, 0),
+						},
+					},
+				],
 			}
 
 			// Unarm preset
@@ -1468,6 +1508,28 @@ module.exports = function getPresets(eventmasterData, _log) {
 				],
 			}
 		})
+	}
+
+	// Test pattern presets light up while their pattern is on the destination
+	for (const preset of Object.values(presets)) {
+		const action = preset.steps?.[0]?.down?.[0]
+		if (action?.actionId !== 'testpattern_on_SCREEN' && action?.actionId !== 'testpattern_on_AUX') continue
+		const isAux = action.actionId === 'testpattern_on_AUX'
+		const destId = isAux ? action.options.auxDestination : action.options.screenDestination
+		const pattern = String(action.options.testPattern)
+		// Background only: the 72x58 pattern icon leaves the button's background showing round it, so
+		// the colour frames the active pattern without covering the icon. Not on Off: its icon is
+		// transparent, so the whole button would change colour
+		preset.feedbacks =
+			pattern === '0'
+				? []
+				: [
+						{
+							feedbackId: 'test_pattern_active',
+							options: { dest: `${isAux ? 'aux' : 'screen'}:${destId}`, pattern },
+							style: { bgcolor: combineRgb(255, 200, 0) },
+						},
+					]
 	}
 
 	return presets

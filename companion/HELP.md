@@ -77,7 +77,14 @@ When **Enable Live Updates** is enabled, the module subscribes to real-time noti
 
 - **Freeze/Unfreeze Source**: Freeze or unfreeze video sources
 - **Freeze/Unfreeze Destination**: Freeze or unfreeze destination outputs
-- **Arm/Unarm Destination**: Enable/disable destinations for transitions
+- **Arm/Unarm Destination**: Enable/disable destinations for transitions (screen destinations can also be toggled)
+
+#### **Arm, Signal and Test Pattern Feedback**
+
+- **Screen Destination Armed**: Screen destination is armed for transitions
+- **Source Signal**: Input signal problem (no signal, format mismatch, out of range, invalid), signal OK, or a specific condition
+- **Test Pattern Active**: Any, or a specific, test pattern is on a screen or AUX destination (the test pattern presets highlight the active pattern)
+- **Variables**: `screen_N_armed`, `source_N_signal`, `screen_N_test_pattern`, `aux_N_test_pattern`
 
 #### **AUX Destinations**
 
