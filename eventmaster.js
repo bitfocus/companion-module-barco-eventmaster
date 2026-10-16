@@ -4,6 +4,7 @@ const os = require('os')
 const { InstanceBase, InstanceStatus, Regex, runEntrypoint } = require('@companion-module/base')
 const ping = require('ping')
 const getPresets = require('./presets')
+const UpgradeScripts = require('./upgrades')
 const _ = require('lodash')
 
 class BarcoInstance extends InstanceBase {
@@ -2849,4 +2850,4 @@ class BarcoInstance extends InstanceBase {
 	}
 }
 
-runEntrypoint(BarcoInstance, [])
+runEntrypoint(BarcoInstance, UpgradeScripts)
