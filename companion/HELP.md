@@ -15,8 +15,8 @@ The module will update presets and actions every 15 seconds by default (configur
 - **Authentication Mode**: None, Operator ID, or Super User Password
 - **Auth Value**: Authentication credentials (when required)
 - **Enable Live Updates**: Enable real-time EventMaster subscriptions for instant feedback
-- **Notification Server Port**: Local port for receiving EventMaster notifications (default: 3000)
-- **Notification Listener IP**: IP address the EventMaster should send notifications to (auto-detected)
+- **Notification Port (this machine)**: Local port for receiving EventMaster notifications (default: 3000)
+- **Notification Server Host**: IP address the EventMaster should send notifications to (auto-detected from the interface on the EventMaster's subnet if left blank; the detected address is shown below)
 
 ---
 
@@ -27,20 +27,27 @@ When **Enable Live Updates** is enabled, the module subscribes to real-time noti
 #### **Benefits**
 
 - **Instant Tally Updates**: Source tally/feedback buttons update immediately when content changes
-- **Real-time Variables**: Source monitoring variables update within ~200ms of changes
-- **Reduced Network Load**: Only affected destinations are queried instead of polling everything
+- **Real-time Variables**: Source monitoring variables update within ~500ms of changes
+- **Reduced Network Load**: Only affected sources/destinations are queried; while subscribed, the full poll is replaced by a 15 s heartbeat and a 5 min full refresh
 
 #### **How It Works**
 
 1. The module starts a local notification server on the configured port
-2. It subscribes to EventMaster screen and AUX destination change events
+2. It subscribes to EventMaster screen, AUX, input, output, source, preset, cue, still, frame and background change events
 3. When content changes, EventMaster sends notifications to your Companion system
 4. The module batches and processes notifications, updating only affected sources/destinations
 5. Tally feedback and variables update automatically without waiting for the next poll (See Sources Feedback)
+6. Subscriptions are lost when the EventMaster restarts; the heartbeat detects this and the module re-subscribes once the device answers again
+
+#### **Status Variables**
+
+- `live_updates_status`: Off, Subscribed, Subscribe failed (with the EventMaster's error), or Error (e.g. port in use)
+- `live_updates_last`: Time and type of the last notification received
+- `live_updates_listener`: Address and port the EventMaster sends notifications to (auto-detected or set)
 
 #### **Network Requirements**
 
-- **Firewall**: The notification port (default 3000) must be open for incoming connections
+- **Firewall**: The notification port (default 3000) must be open for incoming TCP connections from the EventMaster (Windows: network profile set to Private)
 - **Routing**: EventMaster must be able to reach your Companion system's IP address
 
 ---
@@ -229,7 +236,7 @@ The module provides two types of source tally feedback for buttons:
 #### **Real-time Updates**
 
 - Both feedback types update automatically when **Live Updates** are enabled
-- Updates occur within ~200ms of EventMaster content changes
+- Updates occur within ~500ms of EventMaster content changes
 - Fallback to polling updates if live updates are disabled
 - Works with background layers, regular layers, and AUX content
 
