@@ -234,7 +234,18 @@ class BarcoInstance extends InstanceBase {
 			this.log('error', `Failed to build feedbacks: ${err?.message || err}`)
 		}
 		try {
-			this.setPresetDefinitions(getPresets(this.eventmasterData))
+			this.setPresetDefinitions(
+				getPresets(this.eventmasterData, undefined, {
+					inputOutput: this.hasInputOutputFreeze(),
+					layers: this.allLayerGroups().map((g) => ({
+						key: g.key,
+						screenId: g.screen.id,
+						screenName: g.screen.Name,
+						number: g.number,
+						single: g.single,
+					})),
+				}),
+			)
 		} catch (err) {
 			this.log('error', `Failed to build presets: ${err?.message || err}`)
 		}
@@ -390,6 +401,9 @@ class BarcoInstance extends InstanceBase {
 					this.eventmasterData.frameMAC = frameMAC
 					this.eventmasterData.version = version
 					this.eventmasterData.OSVersion = osVersion
+					// FrameType: 0 E2, 1 S3, 2 Ex, 3 IP-4K, 5 E2 Gen2, 6 PDS-4K, 8 Encore3 (Barco R5919184/02)
+					this.eventmasterData.frameType = frameData.FrameType
+					this.eventmasterData.frameTypeName = frameData.FrameTypeName
 
 					// Start with basic variables
 					const variableValues = {
@@ -845,8 +859,11 @@ class BarcoInstance extends InstanceBase {
 
 	/**
 	 * Update variable definitions to include source monitoring variables
+	 * @param {boolean} [populate] also re-read destinations and repopulate values (default). False
+	 *   when only the definitions changed, e.g. after a content read found a new layer layout.
 	 */
-	updateDestinationVariables() {
+	updateDestinationVariables(populate = true) {
+		const io = this.hasInputOutputFreeze()
 		// Start with frame variables (if available) or default variables
 		const variables =
 			this.frameVariableDefinitions.length > 0
@@ -879,6 +896,15 @@ class BarcoInstance extends InstanceBase {
 					variableId: `source_${source.id + 1}_is_active`,
 					name: `${source.Name} - Is Active (PGM or PVW)`,
 				})
+				if (io)
+					variables.push({
+						variableId: `source_${source.id + 1}_frozen`,
+						name: `${source.Name} - Frozen (Yes/No)`,
+					})
+				variables.push({
+					variableId: `source_${source.id + 1}_label`,
+					name: `${source.Name} - Button label (appended -N removed)`,
+				})
 			})
 		}
 
@@ -903,6 +929,15 @@ class BarcoInstance extends InstanceBase {
 					variableId: `screen_${screen.id}_name`,
 					name: `Screen ${screen.id} Name`,
 				})
+				if (io)
+					variables.push({
+						variableId: `screen_${screen.id}_frozen`,
+						name: `Screen ${screen.id} Frozen (Yes/Partial/No)`,
+					})
+				variables.push({
+					variableId: `screen_${screen.id}_label`,
+					name: `Screen ${screen.id} Button label`,
+				})
 			})
 		}
 
@@ -913,7 +948,24 @@ class BarcoInstance extends InstanceBase {
 					variableId: `aux_${aux.id}_name`,
 					name: `AUX ${aux.id} Name`,
 				})
+				variables.push({
+					variableId: `aux_${aux.id}_frozen`,
+					name: `AUX ${aux.id} Frozen (Yes/No)`,
+				})
+				variables.push({
+					variableId: `aux_${aux.id}_label`,
+					name: `AUX ${aux.id} Button label`,
+				})
 			})
+		}
+
+		for (const g of this.allLayerGroups()) {
+			const base = `screen_${g.screen.id}_layer_${g.number}`
+			const label = this.layerGroupLabel(g)
+			variables.push(
+				{ variableId: `${base}_pgm_frozen`, name: `${label} Frozen on program (Yes/No)` },
+				{ variableId: `${base}_pvw_frozen`, name: `${label} Frozen on preview (Yes/No)` },
+			)
 		}
 
 		// Only update variable definitions if they've changed
@@ -927,12 +979,313 @@ class BarcoInstance extends InstanceBase {
 			this.lastVariableDefinitionsHash = variableDefinitionsHash
 		}
 
+		if (!populate) return
 		// Auto-populate source monitoring variables.
 		// Fire-and-forget, but guard the rejection so it can never become an
 		// unhandled promise rejection that crashes the module.
 		this.autoPopulateSourceMonitoring().catch((err) =>
 			this.log('error', `Source monitoring update failed: ${err?.message || err}`),
 		)
+	}
+
+	/**
+	 * Freeze state helpers.
+	 * Source freeze comes from listSources (Freeze per source); screen freeze comes from
+	 * listDestinations, per output. Both are cached in eventmasterData.
+	 */
+
+	/**
+	 * A screen's outputs. 9.2.6318 returns DestOutMapCol (an object) with FrzMode on each output;
+	 * Barco's 8.2 doc describes DestOutMapColl (an array) with Freeze. Accept either.
+	 */
+	screenOutputs(screen) {
+		const colls = [].concat(screen?.DestOutMapCol ?? [], screen?.DestOutMapColl ?? [])
+		return colls.flatMap((coll) => [].concat(coll?.DestOutMap ?? [])).filter(Boolean)
+	}
+
+	outputFreezeValue(out) {
+		return out.FrzMode !== undefined ? out.FrzMode : out.Freeze
+	}
+
+	setOutputFreeze(out, mode) {
+		if (out.FrzMode !== undefined || out.Freeze === undefined) out.FrzMode = mode
+		if (out.Freeze !== undefined) out.Freeze = mode
+	}
+	findSourceById(id) {
+		return Object.values(this.eventmasterData?.sources || {}).find((s) => s.id === id)
+	}
+
+	findScreenById(id) {
+		return Object.values(this.eventmasterData?.ScreenDestinations || {}).find((d) => d.id === id)
+	}
+
+	/**
+	 * Button-friendly name. Event Master appends the source/input number to names as "-N"
+	 * (e.g. "Cam 1-1"). Strip exactly one trailing "-<digits>" and nothing else, so the user's own
+	 * name is kept intact ("Cam 1-1" -> "Cam 1", "Cam 1" -> "Cam 1"). Falls back to the full name.
+	 * @param {string} name
+	 */
+	buttonLabel(name) {
+		const raw = (name || '').trim()
+		return raw.replace(/-\d+$/, '').trim() || raw
+	}
+
+	/**
+	 * Only live inputs can be meaningfully frozen: exclude stills and destinations or user keys
+	 * that appear in the source list because they are re-entered as sources.
+	 */
+	isFreezableSource(source) {
+		return !!source && source.InputCfgIndex >= 0 && !(source.DestIndex >= 0) && !(source.UserKeyIndex >= 0)
+	}
+
+	isSourceFrozen(id) {
+		return (this.findSourceById(id)?.Freeze ?? 0) > 0
+	}
+
+	getScreenOutputFreezeStates(id) {
+		const screen = this.findScreenById(id)
+		return this.screenOutputs(screen)
+			.map((out) => this.outputFreezeValue(out))
+			.filter((v) => v !== undefined)
+			.map((v) => v > 0)
+	}
+
+	isScreenFrozen(id, match = 'any') {
+		const states = this.getScreenOutputFreezeStates(id)
+		if (states.length === 0) return false
+		return match === 'all' ? states.every(Boolean) : states.some(Boolean)
+	}
+
+	findAuxById(id) {
+		return Object.values(this.eventmasterData?.AuxDestinations || {}).find((d) => d.id === id)
+	}
+
+	// Aux freeze is FrzMode on each AuxDestination (9.2.6318); Freeze accepted as a fallback
+	isAuxFrozen(id) {
+		const aux = this.findAuxById(id)
+		return ((aux?.FrzMode !== undefined ? aux.FrzMode : aux?.Freeze) ?? 0) > 0
+	}
+
+	/**
+	 * On the PDS-4K (9.2.5963) input and output freeze set the read-back but leave the picture live:
+	 * only layer freeze works there. So source and screen freeze controls are hidden on it.
+	 */
+	isPdsFrame() {
+		const d = this.eventmasterData || {}
+		return d.frameType === 6 || /PDS/i.test(d.frameTypeName || '')
+	}
+
+	hasInputOutputFreeze() {
+		return !this.isPdsFrame()
+	}
+
+	/**
+	 * A screen's layers as the operator sees them. A mixing layer is an A/B pair of physical layers
+	 * (one on program, one on preview, swapping on a transition); a single layer is one physical layer.
+	 * The two halves of a pair share a Z order and a single layer's is unique, so group by Z order:
+	 * names differ by model (E2 "Layer1-A", PDS-4K "LayerA"). Numbered from the bottom, from 1.
+	 * @returns {{key: string, number: number, single: boolean, layers: object[]}[]}
+	 */
+	screenLayerGroups(screenId) {
+		const layers = [].concat(this._screenContent?.[screenId]?.Layers ?? []).filter((l) => l && l.id !== undefined)
+		const byZ = new Map()
+		for (const layer of layers) {
+			const z = layer.PgmZOrder ?? layer.PvwZOrder ?? layer.id
+			if (!byZ.has(z)) byZ.set(z, [])
+			byZ.get(z).push(layer)
+		}
+		return [...byZ.entries()]
+			.sort((a, b) => a[0] - b[0])
+			.map(([, group], i) => {
+				group.sort((a, b) => a.id - b.id)
+				return { key: `${screenId}:${group[0].id}`, number: i + 1, single: group.length === 1, layers: group }
+			})
+	}
+
+	allLayerGroups() {
+		return Object.values(this.eventmasterData?.ScreenDestinations || {})
+			.sort((a, b) => a.id - b.id)
+			.flatMap((screen) => this.screenLayerGroups(screen.id).map((g) => ({ ...g, screen })))
+	}
+
+	findLayerGroup(key) {
+		const screenId = Number(String(key).split(':')[0])
+		const group = this.screenLayerGroups(screenId).find((g) => g.key === String(key))
+		return group && { ...group, screenId, screen: this.findScreenById(screenId) }
+	}
+
+	layerGroupLabel(group) {
+		const screen = group.screen?.Name ?? `Screen ${group.key.split(':')[0]}`
+		return `${screen} Layer ${group.number}${group.single ? ' (single)' : ''}`
+	}
+
+	/**
+	 * The physical layers of a layer that are on a bus now (PgmMode / PvwMode 1). For a pair that is
+	 * one half. A single layer (E2) or a split PDS-4K half on program reads both: it is one layer shown
+	 * on both buses, and freezing it freezes it everywhere, so it counts for both. A split PDS-4K layer
+	 * can have both halves on one bus, and JSON-RPC doesn't say whether a PDS-4K layer is split, so act
+	 * on whatever is there. Freeze belongs to the physical layer and moves with it through a
+	 * transition, so resolving at press time is right.
+	 * @param {'pgm'|'pvw'} bus
+	 */
+	layersOnBus(group, bus) {
+		if (!group) return []
+		return group.layers.filter((l) => (bus === 'pvw' ? l.PvwMode : l.PgmMode) > 0)
+	}
+
+	// Frozen when any of the layer's physical layers on that bus is frozen
+	isLayerFrozen(key, bus = 'pgm') {
+		return this.layersOnBus(this.findLayerGroup(key), bus).some((l) => (l.Freeze ?? 0) > 0)
+	}
+
+	// Signature of every screen's layer grouping: a change means the layer dropdowns and presets are stale
+	layerStructure() {
+		return JSON.stringify(this.allLayerGroups().map((g) => [g.key, g.number, g.single]))
+	}
+
+	/**
+	 * Re-read source and destination lists to pick up freeze changes, then update freeze
+	 * variables and feedbacks. Cheap: two RPC calls. Serialised so overlapping triggers coalesce.
+	 */
+	async refreshFreezeState() {
+		if (!this.eventmaster) return
+		if (this._freezeRefreshInFlight) {
+			this._freezeRefreshQueued = true
+			return
+		}
+		this._freezeRefreshInFlight = true
+		try {
+			await this.getSourcesFromEventmaster()
+			await this.getDestinationsFromEventmaster()
+			this.updateFreezeVariablesAndFeedbacks()
+		} catch (err) {
+			this.log('error', `Freeze state refresh failed: ${err?.message || err}`)
+		} finally {
+			this._freezeRefreshInFlight = false
+			if (this._freezeRefreshQueued) {
+				this._freezeRefreshQueued = false
+				this.refreshFreezeState()
+			}
+		}
+	}
+
+	// Layer frozen variables, one per bus for every layer
+	layerFrozenVariables() {
+		const values = {}
+		const yn = (layers) => (layers.some((l) => (l.Freeze ?? 0) > 0) ? 'Yes' : 'No')
+		for (const g of this.allLayerGroups()) {
+			const base = `screen_${g.screen.id}_layer_${g.number}`
+			values[`${base}_pgm_frozen`] = yn(this.layersOnBus(g, 'pgm'))
+			values[`${base}_pvw_frozen`] = yn(this.layersOnBus(g, 'pvw'))
+		}
+		return values
+	}
+
+	updateFreezeVariablesAndFeedbacks() {
+		const changed = {}
+		const io = this.hasInputOutputFreeze()
+		for (const source of Object.values(this.eventmasterData?.sources || {})) {
+			const values = {
+				...(io ? { [`source_${source.id + 1}_frozen`]: this.isSourceFrozen(source.id) ? 'Yes' : 'No' } : {}),
+				[`source_${source.id + 1}_label`]: this.buttonLabel(source.Name),
+			}
+			for (const [key, value] of Object.entries(values)) {
+				if (this.previousVariableValues[key] !== value) {
+					changed[key] = value
+					this.previousVariableValues[key] = value
+				}
+			}
+		}
+		for (const screen of Object.values(this.eventmasterData?.ScreenDestinations || {})) {
+			const values = {
+				...(io
+					? {
+							[`screen_${screen.id}_frozen`]: this.isScreenFrozen(screen.id, 'all')
+								? 'Yes'
+								: this.isScreenFrozen(screen.id, 'any')
+									? 'Partial'
+									: 'No',
+						}
+					: {}),
+				[`screen_${screen.id}_label`]: this.buttonLabel(screen.Name),
+			}
+			for (const [key, value] of Object.entries(values)) {
+				if (this.previousVariableValues[key] !== value) {
+					changed[key] = value
+					this.previousVariableValues[key] = value
+				}
+			}
+		}
+		for (const aux of Object.values(this.eventmasterData?.AuxDestinations || {})) {
+			const values = {
+				[`aux_${aux.id}_frozen`]: this.isAuxFrozen(aux.id) ? 'Yes' : 'No',
+				[`aux_${aux.id}_label`]: this.buttonLabel(aux.Name),
+			}
+			for (const [key, value] of Object.entries(values)) {
+				if (this.previousVariableValues[key] !== value) {
+					changed[key] = value
+					this.previousVariableValues[key] = value
+				}
+			}
+		}
+		for (const [key, value] of Object.entries(this.layerFrozenVariables())) {
+			if (this.previousVariableValues[key] !== value) {
+				changed[key] = value
+				this.previousVariableValues[key] = value
+			}
+		}
+		if (Object.keys(changed).length > 0) this.setVariableValues(changed)
+		this.checkFeedbacks('source_frozen', 'screen_frozen', 'aux_frozen', 'layer_frozen')
+	}
+
+	/**
+	 * Freeze or unfreeze physical layers of one screen in one changeContent (Layers[].Freeze), updating
+	 * the cache optimistically, then re-read that screen. The frame answers with a ScreenDestChanged too.
+	 * @param {number[]} layerIds
+	 */
+	sendLayerFreeze(screenId, layerIds, mode) {
+		const params = { id: screenId, Layers: layerIds.map((id) => ({ id, Freeze: mode })) }
+		this.eventmaster.changeContent(params, (err, res) => {
+			if (err) {
+				this.log('error', 'EventMaster layer freeze error: ' + err)
+			} else {
+				this.log('debug', `layer freeze screen ${screenId} layers ${layerIds} mode ${mode}: ${JSON.stringify(res)}`)
+				for (const layer of [].concat(this._screenContent?.[screenId]?.Layers ?? []))
+					if (layerIds.includes(layer?.id)) layer.Freeze = mode
+				this.updateFreezeVariablesAndFeedbacks()
+			}
+			this.autoPopulateSourceMonitoring().catch((e) =>
+				this.log('error', `Layer freeze refresh failed: ${e?.message || e}`),
+			)
+		})
+	}
+
+	/**
+	 * Send a freeze/unfreeze and update the cached state optimistically so the button
+	 * reacts immediately, then confirm against the frame.
+	 * @param {number} type 0 = input source, 2 = screen destination, 3 = aux destination
+	 */
+	sendFreeze(type, id, mode) {
+		const params = { type, id, screengroup: 0, mode }
+		this.eventmaster.freezeDestSource(params, (err, res) => {
+			if (err) {
+				this.log('error', 'EventMaster freeze error: ' + err)
+				this.refreshFreezeState()
+				return
+			}
+			this.log('debug', `freeze type ${type} id ${id} mode ${mode}: ${JSON.stringify(res)}`)
+			if (type === 0) {
+				const source = this.findSourceById(id)
+				if (source) source.Freeze = mode
+			} else if (type === 2) {
+				for (const out of this.screenOutputs(this.findScreenById(id))) this.setOutputFreeze(out, mode)
+			} else if (type === 3) {
+				const aux = this.findAuxById(id)
+				if (aux) this.setOutputFreeze(aux, mode)
+			}
+			this.updateFreezeVariablesAndFeedbacks()
+			this.refreshFreezeState()
+		})
 	}
 
 	/**
@@ -980,6 +1333,9 @@ class BarcoInstance extends InstanceBase {
 
 					if (res && res.response) {
 						const content = res.response
+						// Kept for layer freeze (Layers[].Freeze, PgmMode, PvwMode, Z order)
+						this._screenContent = this._screenContent || {}
+						this._screenContent[dest.id] = content
 
 						// Check background layers for PGM (id 0 = PGM background)
 						if (content.BGLyr && content.BGLyr.length > 0) {
@@ -1049,6 +1405,15 @@ class BarcoInstance extends InstanceBase {
 					this.log('error', `Could not get content for screen destination ${dest.id}: ${err}`)
 				}
 			}
+		}
+
+		// Layers are read here, after the definitions are built (and a layer can be added or removed
+		// at any time): rebuild the definitions when the layer layout changes
+		const layers = this.layerStructure()
+		if (layers !== this._layerStructure) {
+			this._layerStructure = layers
+			this.updateDestinationVariables(false)
+			this.refreshDefinitions()
 		}
 
 		// Query all AUX destinations
@@ -1188,6 +1553,9 @@ class BarcoInstance extends InstanceBase {
 		} else {
 			this.log('debug', 'No variable changes detected, skipping update')
 		}
+
+		// Freeze state (from the source and destination lists, and the screen content just read)
+		this.updateFreezeVariablesAndFeedbacks()
 
 		// Update feedbacks to reflect current source activity
 		this.checkFeedbacks()
@@ -2381,6 +2749,175 @@ class BarcoInstance extends InstanceBase {
 			},
 		}
 
+		// Freeze Source with toggle (uses frame-reported freeze state)
+		const CHOICES_FREEZE_SOURCES = Object.values(this.eventmasterData.sources)
+			.filter((source) => this.isFreezableSource(source))
+			.map((source) => ({ id: source.id, label: this.buttonLabel(source.Name) }))
+		actions['frz_source_toggle'] = {
+			name: 'Freeze Source (Toggle)',
+			description: 'Toggles freeze on an input source based on the state reported by the frame',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'source',
+					minChoicesForSearch: 5,
+					choices: CHOICES_FREEZE_SOURCES,
+					default: CHOICES_FREEZE_SOURCES.length > 0 ? CHOICES_FREEZE_SOURCES[0].id : 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Mode',
+					id: 'mode',
+					choices: [
+						{ id: 'toggle', label: 'Toggle' },
+						{ id: '1', label: 'Freeze' },
+						{ id: '0', label: 'Unfreeze' },
+					],
+					default: 'toggle',
+				},
+			],
+			callback: (action) => {
+				const id = parseInt(action.options.source)
+				const mode =
+					action.options.mode === 'toggle' ? (this.isSourceFrozen(id) ? 0 : 1) : parseInt(action.options.mode)
+				this.sendFreeze(0, id, mode)
+			},
+		}
+
+		// Freeze Screen Destination with toggle
+		actions['frz_screen_toggle'] = {
+			name: 'Freeze Screen Destination (Toggle)',
+			description: 'Toggles freeze on a screen destination. Toggle unfreezes if any output is frozen.',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen destination',
+					id: 'destId',
+					choices: CHOICES_SCREENDESTINATIONS,
+					default: CHOICES_SCREENDESTINATIONS.length > 0 ? CHOICES_SCREENDESTINATIONS[0].id : 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Mode',
+					id: 'mode',
+					choices: [
+						{ id: 'toggle', label: 'Toggle' },
+						{ id: '1', label: 'Freeze' },
+						{ id: '0', label: 'Unfreeze' },
+					],
+					default: 'toggle',
+				},
+			],
+			callback: (action) => {
+				const id = parseInt(action.options.destId)
+				const mode =
+					action.options.mode === 'toggle' ? (this.isScreenFrozen(id, 'any') ? 0 : 1) : parseInt(action.options.mode)
+				this.sendFreeze(2, id, mode)
+			},
+		}
+
+		// Freeze Aux Destination with toggle
+		actions['frz_aux_toggle'] = {
+			name: 'Freeze Aux Destination (Toggle)',
+			description: 'Toggles freeze on an aux destination based on the state reported by the frame',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Aux destination',
+					id: 'auxId',
+					choices: CHOICES_AUXDESTINATIONS,
+					default: CHOICES_AUXDESTINATIONS.length > 0 ? CHOICES_AUXDESTINATIONS[0].id : 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Mode',
+					id: 'mode',
+					choices: [
+						{ id: 'toggle', label: 'Toggle' },
+						{ id: '1', label: 'Freeze' },
+						{ id: '0', label: 'Unfreeze' },
+					],
+					default: 'toggle',
+				},
+			],
+			callback: (action) => {
+				const id = parseInt(action.options.auxId)
+				const mode = action.options.mode === 'toggle' ? (this.isAuxFrozen(id) ? 0 : 1) : parseInt(action.options.mode)
+				this.sendFreeze(3, id, mode)
+			},
+		}
+
+		// On the PDS-4K input and output freeze don't freeze the picture: offer layer freeze only
+		if (!this.hasInputOutputFreeze()) {
+			delete actions.frz_Source
+			delete actions.freeze_dest
+			delete actions.frz_source_toggle
+			delete actions.frz_screen_toggle
+		}
+
+		// Freeze Layer with toggle (changeContent Layers[].Freeze)
+		const CHOICES_LAYERS = this.allLayerGroups().map((g) => ({ id: g.key, label: this.layerGroupLabel(g) }))
+		actions['frz_layer_toggle'] = {
+			name: 'Freeze Layer (Toggle)',
+			description:
+				'Freezes one layer of a screen; the same source in other layers stays live. Freezes whatever of the layer is on the bus you pick when pressed, and it stays frozen through a transition.',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Layer',
+					id: 'layer',
+					minChoicesForSearch: 8,
+					choices: CHOICES_LAYERS,
+					default: CHOICES_LAYERS.length > 0 ? CHOICES_LAYERS[0].id : '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Bus (mixing layers)',
+					id: 'bus',
+					choices: [
+						{ id: 'pgm', label: 'Program' },
+						{ id: 'pvw', label: 'Preview' },
+					],
+					default: 'pgm',
+				},
+				{
+					type: 'dropdown',
+					label: 'Mode',
+					id: 'mode',
+					choices: [
+						{ id: 'toggle', label: 'Toggle' },
+						{ id: '1', label: 'Freeze' },
+						{ id: '0', label: 'Unfreeze' },
+					],
+					default: 'toggle',
+				},
+			],
+			callback: (action) => {
+				const group = this.findLayerGroup(action.options.layer)
+				const bus = action.options.bus || 'pgm'
+				const layers = this.layersOnBus(group, bus)
+				if (!layers.length) {
+					const where = bus === 'pvw' ? 'preview' : 'program'
+					this.log(
+						'warn',
+						group
+							? `Freeze layer: ${this.layerGroupLabel(group)} has nothing on ${where}`
+							: `Freeze layer: layer ${action.options.layer} not found`,
+					)
+					return
+				}
+				// Toggle: unfreeze if any is frozen, else freeze them all
+				const frozen = layers.some((l) => (l.Freeze ?? 0) > 0)
+				const mode = action.options.mode === 'toggle' ? (frozen ? 0 : 1) : parseInt(action.options.mode)
+				this.sendLayerFreeze(
+					group.screenId,
+					layers.map((l) => l.id),
+					mode,
+				)
+			},
+		}
+
 		// List Source Main Backup
 		// actions['list_source_main_backup'] = {
 		// 	name: 'List Source Main Backup',
@@ -2844,6 +3381,127 @@ class BarcoInstance extends InstanceBase {
 				}
 				return false
 			},
+		}
+
+		// Freeze feedbacks
+		const freezeSourceChoices = Object.values(this.eventmasterData?.sources || {})
+			.filter((source) => this.isFreezableSource(source))
+			.map((source) => ({
+				id: source.id,
+				label: this.buttonLabel(source.Name),
+			}))
+		feedbacks['source_frozen'] = {
+			type: 'boolean',
+			name: 'Source Frozen',
+			description: 'True when the selected input source is frozen on the frame',
+			defaultStyle: {
+				bgcolor: 0x0064ff,
+				color: 0xffffff,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'source',
+					minChoicesForSearch: 5,
+					choices: freezeSourceChoices,
+					default: freezeSourceChoices.length > 0 ? freezeSourceChoices[0].id : 0,
+				},
+			],
+			callback: (feedback) => this.isSourceFrozen(parseInt(feedback.options.source)),
+		}
+
+		const freezeScreenChoices = Object.values(this.eventmasterData?.ScreenDestinations || {})
+			.sort((a, b) => a.id - b.id)
+			.map((dest) => ({ id: dest.id, label: dest.Name }))
+		feedbacks['screen_frozen'] = {
+			type: 'boolean',
+			name: 'Screen Destination Frozen',
+			description: 'True when the selected screen destination has frozen outputs',
+			defaultStyle: {
+				bgcolor: 0x0064ff,
+				color: 0xffffff,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen destination',
+					id: 'destId',
+					choices: freezeScreenChoices,
+					default: freezeScreenChoices.length > 0 ? freezeScreenChoices[0].id : 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Match',
+					id: 'match',
+					choices: [
+						{ id: 'any', label: 'Any output frozen' },
+						{ id: 'all', label: 'All outputs frozen' },
+					],
+					default: 'any',
+				},
+			],
+			callback: (feedback) => this.isScreenFrozen(parseInt(feedback.options.destId), feedback.options.match || 'any'),
+		}
+
+		const freezeAuxChoices = Object.values(this.eventmasterData?.AuxDestinations || {})
+			.sort((a, b) => a.id - b.id)
+			.map((dest) => ({ id: dest.id, label: dest.Name }))
+		feedbacks['aux_frozen'] = {
+			type: 'boolean',
+			name: 'Aux Destination Frozen',
+			description: 'True when the selected aux destination is frozen on the frame',
+			defaultStyle: {
+				bgcolor: 0x0064ff,
+				color: 0xffffff,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Aux destination',
+					id: 'auxId',
+					choices: freezeAuxChoices,
+					default: freezeAuxChoices.length > 0 ? freezeAuxChoices[0].id : 0,
+				},
+			],
+			callback: (feedback) => this.isAuxFrozen(parseInt(feedback.options.auxId)),
+		}
+
+		if (!this.hasInputOutputFreeze()) {
+			delete feedbacks.source_frozen
+			delete feedbacks.screen_frozen
+		}
+
+		const freezeLayerChoices = this.allLayerGroups().map((g) => ({ id: g.key, label: this.layerGroupLabel(g) }))
+		feedbacks['layer_frozen'] = {
+			type: 'boolean',
+			name: 'Layer Frozen',
+			description: 'True when what of the layer is on the bus you pick is frozen',
+			defaultStyle: {
+				bgcolor: 0x0064ff,
+				color: 0xffffff,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Layer',
+					id: 'layer',
+					minChoicesForSearch: 8,
+					choices: freezeLayerChoices,
+					default: freezeLayerChoices.length > 0 ? freezeLayerChoices[0].id : '',
+				},
+				{
+					type: 'dropdown',
+					label: 'Bus (mixing layers)',
+					id: 'bus',
+					choices: [
+						{ id: 'pgm', label: 'Program' },
+						{ id: 'pvw', label: 'Preview' },
+					],
+					default: 'pgm',
+				},
+			],
+			callback: (feedback) => this.isLayerFrozen(feedback.options.layer, feedback.options.bus || 'pgm'),
 		}
 
 		return feedbacks
