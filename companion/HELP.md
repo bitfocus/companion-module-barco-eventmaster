@@ -75,9 +75,21 @@ When **Enable Live Updates** is enabled, the module subscribes to real-time noti
 
 #### **Sources & Destinations**
 
-- **Freeze/Unfreeze Source**: Freeze or unfreeze video sources
-- **Freeze/Unfreeze Destination**: Freeze or unfreeze destination outputs
+- **Freeze Source**: Freeze, unfreeze or toggle an input source
+- **Freeze Screen Destination**: Freeze, unfreeze or toggle all outputs of a screen destination
+- **Freeze Aux Destination**: Freeze, unfreeze or toggle an AUX destination
+- **Freeze Layer**: Freeze, unfreeze or toggle a layer on PGM or PVW
 - **Arm/Unarm Destination**: Enable/disable destinations for transitions (screen destinations can also be toggled)
+- **Note:** On PDS-4K, source and destination freeze are not offered (the device accepts them but the output is not frozen); use layer freeze
+
+#### **Freeze Feedback**
+
+- **Source Frozen**: Source is frozen
+- **Screen Destination Frozen**: Any or all outputs of the screen destination are frozen
+- **Aux Destination Frozen**: AUX destination is frozen
+- **Layer Frozen**: Layer is frozen on PGM or PVW (set the same bus as the button's action)
+- **Variables**: `source_N_frozen`, `screen_N_frozen` (Yes/Partial/No), `aux_N_frozen`, `screen_S_layer_N_pgm_frozen`, `screen_S_layer_N_pvw_frozen`; `source_N_label`, `screen_N_label` and `aux_N_label` give the name without the `-N` the EventMaster appends
+- **Presets**: _Freeze Sources_ (live inputs only), _Freeze Screen Destinations_, _Freeze Aux Destinations_ and _Freeze Layers_ (PGM and PVW per layer)
 
 #### **Arm, Signal and Test Pattern Feedback**
 
