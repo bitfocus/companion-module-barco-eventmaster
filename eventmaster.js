@@ -7,6 +7,42 @@ const getPresets = require('./presets')
 const UpgradeScripts = require('./upgrades')
 const _ = require('lodash')
 
+// Event Master notifications (E2 9.2.6318 and 9.2.6373, PDS-4K 9.2.5963) cover live state as well
+// as structure: InputCfgChanged on source freeze, ScreenDestChanged on screen freeze, layer freeze,
+// takes (one per transition frame) and arm, AUXDestChanged on aux changes, OutputCfgChanged (with
+// output ids, not destination ids) on test patterns. They carry ids only, so each debounced batch
+// triggers a targeted read of just what changed.
+const NOTIFY_EVENTS = [
+	'ScreenDestChanged',
+	'AUXDestChanged',
+	'InputCfgChanged',
+	'OutputCfgChanged',
+	'SourceChanged',
+	'PresetChanged',
+	'CueChanged',
+	'StillChanged',
+	'FrameChanged',
+	'BGSourceChanged',
+]
+// No NativeRateChanged: the PDS-4K rejects the whole subscribe if it is listed ("not applicable for
+// PDS"), and the slow full refresh picks up a native rate change anyway.
+// Types that mean names, lists or frame settings changed: refresh everything, not just live state
+const STRUCTURAL_EVENTS = [
+	'SourceChanged',
+	'PresetChanged',
+	'CueChanged',
+	'StillChanged',
+	'FrameChanged',
+	'BGSourceChanged',
+]
+const RESUBSCRIBE_MS = 10 * 60 * 1000
+// While live updates are working, the full poll is replaced by a one-call heartbeat (to notice the
+// frame going away and coming back, e.g. a reboot, which drops subscriptions) and a slow full refresh
+// as a backstop for anything the frame doesn't notify (user keys, for one).
+const HEARTBEAT_MS = 15 * 1000
+const BACKSTOP_MS = 5 * 60 * 1000
+const MISSED_HEARTBEATS_FOR_DOWN = 2
+
 class BarcoInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
@@ -254,52 +290,256 @@ class BarcoInstance extends InstanceBase {
 	async setupNotifications() {
 		if (!this.eventmaster) return
 		if (this.notificationActive) return
-		try {
-			// First unsubscribe to be sure we start clean
-			this.log('info', 'Unsubscribing from all notifications to start clean...')
-			this.eventmaster.unsubscribe(() => {
-				this.log('info', 'Unsubscribe completed')
-			})
+		const port = this.notificationPort || 3000
+		const listenerHost = this.getNotificationHost()
+		this.log('info', `Live updates: listening on ${listenerHost}:${port}, subscribing frame ${this.config.host}`)
+		const typed = String(this.notificationHost || this.config?.notification_host || '').trim()
+		this.setStatusVariables({ live_updates_listener: `${listenerHost}:${port} (${typed ? 'set' : 'auto'})` })
+		this.setStatusVariables({ live_updates_status: 'Starting' })
 
-			const port = this.config.notification_port || this.notificationPort || 3000
-			const listenerHost = this.getNotificationHost()
-			this.log(
-				'info',
-				`Notification server initialization: listener=${listenerHost}:${port}, frame=${this.config.host}`,
-			)
-			// Use NotificationListener utility for batching and debounce
-			const events = ['ScreenDestChanged', 'AUXDestChanged']
-			const debounceMs = 200 // Fast feedback, but still debounced
-			this._notificationListener = new NotificationListener(this.config.host, listenerHost, port, events, debounceMs)
-			this._notificationListener.onPull = async () => {
-				this._lastNotificationAt = Date.now()
-				// Only fetch content for changed screens/auxes
-				try {
-					// Always query all screens and auxes after any notification to ensure state is complete
-					this._lastUpdateSource = 'subscription-notify'
-					await this.autoPopulateSourceMonitoring().catch((e) =>
-						this.log('error', `Auto-populate (notify, full) failed: ${e}`),
-					)
-				} catch (e) {
-					this.log('error', `Notification pull handler error: ${e}`)
-				}
+		this._listenerError = null
+		const listener = new NotificationListener(this.config.host, listenerHost, port, NOTIFY_EVENTS, 500)
+		listener.onError = (err) => {
+			const msg =
+				err?.code === 'EADDRINUSE'
+					? `port ${port} is already in use on this machine - choose another notification port`
+					: err?.message || String(err)
+			this._listenerError = msg
+			this.log('error', `Live updates listener error: ${msg}`)
+			this.setStatusVariables({ live_updates_status: `Error: ${msg}` })
+			this.stopLivePolling(true) // notifications can't arrive: back to the full poll
+		}
+		listener.onSubscribed = (ok, detail) => {
+			// A listener failure (e.g. port in use) means notifications can't arrive, whatever the frame says
+			if (this._listenerError) {
+				this.setStatusVariables({ live_updates_status: `Error: ${this._listenerError}` })
+				return
 			}
-			this._notificationListener.start()
-			this.notificationActive = true
-		} catch (e) {
-			this.notificationActive = false
-			throw e
+			if (ok) {
+				this.log('info', `Live updates: subscribed (${listenerHost}:${port})`)
+				this.setStatusVariables({ live_updates_status: 'Subscribed' })
+				this.startLivePolling()
+			} else {
+				this.log('error', `Live updates: subscribe failed: ${detail}`)
+				this.setStatusVariables({ live_updates_status: `Subscribe failed: ${detail}` })
+				this.stopLivePolling(true)
+			}
+		}
+		listener.onPull = async ({ counts, snapshot }) => {
+			const types = Object.entries(counts || {})
+				.filter(([, n]) => n > 0)
+				.map(([t, n]) => `${t} x${n}`)
+				.join(', ')
+			this._lastNotificationAt = Date.now()
+			this.log('debug', `Live update received: ${types || 'unknown'}`)
+			this.setStatusVariables({
+				live_updates_last: `${new Date().toLocaleTimeString()} ${types || 'notification'}`,
+			})
+			await this.applyLiveUpdate(this.planLiveUpdate(counts, snapshot))
+		}
+		this._notificationListener = listener
+		listener.start()
+		this.notificationActive = true
+
+		// Subscriptions are lost when the frame restarts; renew them periodically as a backstop
+		if (this._resubscribeTimer) clearInterval(this._resubscribeTimer)
+		this._resubscribeTimer = setInterval(() => this.resubscribeNotifications('periodic'), RESUBSCRIBE_MS)
+	}
+
+	resubscribeNotifications(reason) {
+		if (!this.notificationActive || !this._notificationListener) return
+		this.log('debug', `Live updates: re-subscribing (${reason})`)
+		this._notificationListener.resubscribe()
+	}
+
+	/**
+	 * Live updates are working: replace the full poll with a one-call heartbeat and a slow full
+	 * refresh. A polling interval of 0 means no polling at all, so neither runs then.
+	 */
+	startLivePolling() {
+		if (this._liveMode) return
+		this._liveMode = true
+		if (this.polling_interval) {
+			clearInterval(this.polling_interval)
+			this.polling_interval = undefined
+		}
+		if (this.config?.pollingInterval === 0) {
+			this.log('debug', 'Live updates on, polling disabled: no heartbeat or backstop refresh')
+			return
+		}
+		const heartbeatMs = this._heartbeatMs || HEARTBEAT_MS
+		const backstopMs = this._backstopMs || BACKSTOP_MS
+		this._missedHeartbeats = 0
+		this._frameDown = false
+		this._heartbeatTimer = setInterval(() => this.heartbeatTick(), heartbeatMs)
+		this._backstopTimer = setInterval(() => this.refreshStructure('backstop refresh'), backstopMs)
+		this.log(
+			'info',
+			`Live updates working: full poll replaced by a ${heartbeatMs / 1000} s heartbeat and a full refresh every ${backstopMs / 60000} min`,
+		)
+	}
+
+	// Live updates stopped or failed. restoreFullPoll: go back to the normal full poll
+	stopLivePolling(restoreFullPoll) {
+		if (this._heartbeatTimer) clearInterval(this._heartbeatTimer)
+		if (this._backstopTimer) clearInterval(this._backstopTimer)
+		this._heartbeatTimer = undefined
+		this._backstopTimer = undefined
+		const wasLive = this._liveMode
+		this._liveMode = false
+		if (restoreFullPoll && wasLive && this.eventmaster) {
+			this.log('info', 'Live updates not working: back to the full poll')
+			this.eventmasterPoller()
 		}
 	}
 
-	isLikelySame24Subnet(a, b) {
+	/**
+	 * One small read (power status, which also keeps the PSU variables current). Two misses in a row
+	 * mean the frame is down; the first answer after that means it's back, possibly rebooted and so
+	 * without our subscription: re-subscribe and refresh everything at once.
+	 */
+	async heartbeatTick() {
+		if (!this.eventmaster || this._heartbeatInFlight) return
+		this._heartbeatInFlight = true
 		try {
-			const pa = (a || '').split('.')
-			const pb = (b || '').split('.')
-			return pa.length === 4 && pb.length === 4 && pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2]
-		} catch {
-			return false
+			const res = await new Promise((resolve, reject) => {
+				this.eventmaster.powerStatus((err, result) => (err ? reject(err) : resolve(result)))
+			})
+			if (this._frameDown) {
+				this._frameDown = false
+				this.log('info', 'Frame responding again: re-subscribing live updates and refreshing')
+				this.updateStatus(InstanceStatus.Ok)
+				this.resubscribeNotifications('frame back online')
+				await this.refreshStructure('frame back online')
+			}
+			this._missedHeartbeats = 0
+			this.applyPowerStatus(res)
+		} catch (err) {
+			this._missedHeartbeats = (this._missedHeartbeats || 0) + 1
+			if (this._missedHeartbeats === MISSED_HEARTBEATS_FOR_DOWN) {
+				this._frameDown = true
+				this.log('warn', `Frame not responding (${err?.message || err}): will re-subscribe when it returns`)
+				this.updateStatus(InstanceStatus.ConnectionFailure, 'Frame not responding')
+			}
+		} finally {
+			this._heartbeatInFlight = false
 		}
+	}
+
+	/**
+	 * Turn a debounced batch of notifications into the reads it needs. Additions, removals or a
+	 * structural type mean a full refresh; otherwise only what changed is re-read.
+	 */
+	planLiveUpdate(counts, snapshot) {
+		const ids = (type) => {
+			const c = snapshot?.[type]
+			return [...new Set([...(c?.update || []), ...(c?.add || []), ...(c?.remove || [])])]
+		}
+		const hit = (type) => (counts?.[type] || 0) > 0
+		const addOrRemove = Object.values(snapshot || {}).some((c) => c?.add?.length || c?.remove?.length)
+		const owners = this.outputOwners(ids('OutputCfgChanged'))
+		return {
+			full: addOrRemove || STRUCTURAL_EVENTS.some(hit),
+			sources: hit('InputCfgChanged'),
+			destinations: hit('ScreenDestChanged') || hit('AUXDestChanged'),
+			screens: [...new Set([...ids('ScreenDestChanged'), ...owners.screens])],
+			auxes: [...new Set([...ids('AUXDestChanged'), ...owners.auxes])],
+		}
+	}
+
+	/**
+	 * OutputCfgChanged carries output ids. Find the screens and auxes that own those outputs from
+	 * the cached content; an output we can't place means re-reading every destination's content.
+	 */
+	outputOwners(outputIds) {
+		const result = { screens: [], auxes: [] }
+		if (!outputIds.length) return result
+		const outIds = (content) => [].concat(content?.OutputCfg ?? []).map((o) => o?.id)
+		const unplaced = new Set(outputIds)
+		for (const [kind, cache] of [
+			['screens', this._screenContent],
+			['auxes', this._auxContent],
+		]) {
+			for (const [id, content] of Object.entries(cache || {})) {
+				const owned = outIds(content).filter((o) => unplaced.has(o))
+				if (owned.length) result[kind].push(Number(id))
+				for (const o of owned) unplaced.delete(o)
+			}
+		}
+		if (unplaced.size) {
+			result.screens = Object.values(this.eventmasterData?.ScreenDestinations || {}).map((d) => d.id)
+			result.auxes = Object.values(this.eventmasterData?.AuxDestinations || {}).map((d) => d.id)
+		}
+		return result
+	}
+
+	/**
+	 * Apply a live update plan. Serialised: plans arriving while one runs are merged and run next,
+	 * so nothing is dropped and a burst costs at most one extra pass.
+	 */
+	async applyLiveUpdate(plan) {
+		if (this._livePlanRunning) {
+			const q = this._livePlanQueued
+			this._livePlanQueued = q
+				? {
+						full: q.full || plan.full,
+						sources: q.sources || plan.sources,
+						destinations: q.destinations || plan.destinations,
+						screens: [...new Set([...q.screens, ...plan.screens])],
+						auxes: [...new Set([...q.auxes, ...plan.auxes])],
+					}
+				: plan
+			return
+		}
+		this._livePlanRunning = true
+		try {
+			if (plan.full) {
+				await this.refreshStructure('live update')
+				return
+			}
+			const before = this.structureNames()
+			if (plan.sources) await this.getSourcesFromEventmaster()
+			if (plan.destinations) await this.getDestinationsFromEventmaster()
+			// A rename comes as an update to an existing id; names feed variable definitions,
+			// dropdowns and presets, so treat it as structural
+			if (this.structureNames() !== before) {
+				await this.refreshStructure('rename')
+				return
+			}
+			await this.autoPopulateSourceMonitoring({ screens: plan.screens, auxes: plan.auxes })
+		} catch (e) {
+			this.log('error', `Live update failed: ${e?.message || e}`)
+		} finally {
+			this._livePlanRunning = false
+			const next = this._livePlanQueued
+			this._livePlanQueued = null
+			if (next) await this.applyLiveUpdate(next)
+		}
+	}
+
+	structureNames() {
+		const names = (o) => Object.values(o || {}).map((x) => `${x.id}:${x.Name}`)
+		const d = this.eventmasterData || {}
+		return JSON.stringify([names(d.sources), names(d.ScreenDestinations), names(d.AuxDestinations)])
+	}
+
+	async refreshStructure(reason) {
+		if (this._structureRefreshInFlight) return
+		this._structureRefreshInFlight = true
+		try {
+			this._lastUpdateSource = reason
+			await this.getAllDataFromEventmaster()
+			this.refreshDefinitions()
+		} catch (e) {
+			this.log('error', `Refresh (${reason}) failed: ${e?.message || e}`)
+		} finally {
+			this._structureRefreshInFlight = false
+		}
+	}
+
+	setStatusVariables(values) {
+		this._statusVariables = { ...(this._statusVariables || {}), ...values }
+		this.setVariableValues(values)
 	}
 
 	getLocalIPv4s() {
@@ -318,51 +558,96 @@ class BarcoInstance extends InstanceBase {
 	}
 
 	async teardownNotifications() {
-		if (!this.eventmaster) return
+		this.stopLivePolling(false)
+		if (this._resubscribeTimer) {
+			clearInterval(this._resubscribeTimer)
+			this._resubscribeTimer = null
+		}
 		if (!this.notificationActive) return
+		this.notificationActive = false
+		const listener = this._notificationListener
+		this._notificationListener = null
 		try {
-			const port = this.config.notification_port || this.notificationPort || 3004
-			const listenerHost = this.getNotificationHost()
-			// Best-effort unsubscribe
-			await new Promise((resolve) => {
-				try {
-					this.eventmaster.unsubscribe(listenerHost, port, ['ScreenDestChanged', 'AUXDestChanged'], () => resolve())
-				} catch {
-					resolve()
-				}
-			})
-			this.notificationActive = false
-			if (this._notifyTimer) {
-				clearTimeout(this._notifyTimer)
-				this._notifyTimer = null
-			}
-			if (this._notifyNoEventTimer) {
-				clearTimeout(this._notifyNoEventTimer)
-				this._notifyNoEventTimer = null
-			}
+			if (listener) await listener.stop()
 		} catch {
 			// ignore teardown errors
 		}
+		this.setStatusVariables({ live_updates_status: 'Off' })
 	}
 
+	/**
+	 * Local IP the frame should send notifications to: the configured one, else the interface on
+	 * the same /24 as the frame, else the first non-internal IPv4.
+	 */
 	getNotificationHost() {
-		if (this.notificationHost) return this.notificationHost
-		if (this.config?.notification_host) return this.config.notification_host
-		// Auto-detect a likely local IPv4 address
+		const typed = String(this.notificationHost || this.config?.notification_host || '').trim()
+		if (typed) return typed
+		const found = this.detectListenerIp()
+		if (found.reason === 'fallback')
+			this.log(
+				'warn',
+				`Live updates: no local interface on the frame's network; using ${found.address} (${found.iface}). Set the notification server host in the config if notifications don't arrive.`,
+			)
+		return found.address
+	}
+
+	// One line for the config form: what auto-detect picks for the saved frame address, and why
+	describeDetectedListener() {
+		if (!this.config?.host) return 'Set the target IP first'
+		const d = this.detectListenerIp()
+		if (d.reason === 'subnet') return `${d.address} (${d.iface})`
+		if (d.reason === 'fallback')
+			return `No interface on target's network. Best guess ${d.address} (${d.iface}): enter the right address.`
+		return 'No network interface found'
+	}
+
+	/**
+	 * Which of this machine's addresses the frame should send notifications to: the interface on the
+	 * frame's network (by its real netmask; /24 assumed if the system doesn't report one), wired
+	 * before Wi-Fi when several match, else the first interface as a guess.
+	 * @returns {{address: string, iface: string, reason: 'subnet'|'fallback'|'none'}}
+	 */
+	detectListenerIp() {
+		const toInt = (ip) => {
+			const p = String(ip || '')
+				.split('.')
+				.map(Number)
+			return p.length === 4 && p.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)
+				? ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0
+				: null
+		}
+		const candidates = []
 		try {
 			const ifaces = os.networkInterfaces()
 			for (const name of Object.keys(ifaces)) {
 				for (const iface of ifaces[name] || []) {
-					if (iface.family === 'IPv4' && !iface.internal) {
-						return iface.address
-					}
+					if (iface.family === 'IPv4' && !iface.internal) candidates.push({ name, ...iface })
 				}
 			}
 		} catch {
 			// ignore
 		}
-		// Fallback to localhost
-		return '127.0.0.1'
+		const frame = toInt(this.config?.host)
+		const onFrameNet = candidates.filter((c) => {
+			const ip = toInt(c.address)
+			const mask = toInt(c.netmask) ?? toInt('255.255.255.0')
+			return frame !== null && ip !== null && mask !== 0 && (ip & mask) >>> 0 === (frame & mask) >>> 0
+		})
+		// Wired first, then Wi-Fi, then VPN/virtual adapters and point-to-point (/32) links, which are
+		// almost never the way a frame reaches this machine
+		const rank = (c) =>
+			/tailscale|zerotier|wireguard|vpn|vethernet|hyper-v|wsl|vmware|virtualbox|docker|npcap|loopback/i.test(c.name) ||
+			c.netmask === '255.255.255.255'
+				? 2
+				: /wi-?fi|wlan|wireless/i.test(c.name)
+					? 1
+					: 0
+		const best = (list) => [...list].sort((a, b) => rank(a) - rank(b))[0]
+		const pick = best(onFrameNet)
+		if (pick) return { address: pick.address, iface: pick.name, reason: 'subnet' }
+		const guess = best(candidates)
+		if (guess) return { address: guess.address, iface: guess.name, reason: 'fallback' }
+		return { address: '127.0.0.1', iface: 'loopback', reason: 'none' }
 	}
 
 	async getFrameSettings() {
@@ -524,6 +809,8 @@ class BarcoInstance extends InstanceBase {
 	// Polling function to keep data updated
 	eventmasterPoller() {
 		if (!this.config) return
+		// Live updates working: the heartbeat and backstop refresh replace this poll
+		if (this._liveMode) return
 
 		// Always clear any existing poller before (re)starting to avoid stacking timers.
 		if (this.polling_interval) {
@@ -559,7 +846,7 @@ class BarcoInstance extends InstanceBase {
 				width: 12,
 				label: 'Information',
 				value:
-					'This module uses the official EventMaster JSON API. If the status is OK, it ONLY means that the IP configured answers on icmp ping. The module will update presets and actions every 15 seconds ',
+					'This module uses the official EventMaster JSON API. If the status is OK, it ONLY means that the IP configured answers on icmp ping. With live updates on, the frame notifies changes (freeze, takes, names, presets) and the module re-reads just what changed. Otherwise everything refreshes on the polling interval.',
 			},
 			{
 				type: 'textinput',
@@ -572,7 +859,7 @@ class BarcoInstance extends InstanceBase {
 			{
 				type: 'number',
 				id: 'pollingInterval',
-				label: 'Polling Interval (in seconds) for presets and actions (type 0 to disable)',
+				label: 'Polling interval (seconds, 0 = off)',
 				width: 6,
 				default: 15,
 			},
@@ -587,7 +874,7 @@ class BarcoInstance extends InstanceBase {
 			{
 				type: 'number',
 				id: 'notification_port',
-				label: 'Notification server port default 3000 (local)',
+				label: 'Notification port (this machine)',
 				width: 6,
 				default: 3000,
 				isVisible: (config) => !!config.enable_notifications,
@@ -595,9 +882,18 @@ class BarcoInstance extends InstanceBase {
 			{
 				type: 'textinput',
 				id: 'notification_host',
-				label: 'Notification server host (your local IP address)',
+				label: 'Notification server host (leave blank to auto-detect)',
 				width: 6,
 				placeholder: 'Auto-detect local IP if empty',
+				isVisible: (config) => !!config.enable_notifications,
+			},
+			{
+				// Worked out each time the form opens, so it shows what auto-detect would pick right now
+				type: 'static-text',
+				id: 'notification_host_detected',
+				label: 'Auto-detected address',
+				width: 6, // sits in the gap beside the host field
+				value: this.describeDetectedListener(),
 				isVisible: (config) => !!config.enable_notifications,
 			},
 			{
@@ -810,36 +1106,41 @@ class BarcoInstance extends InstanceBase {
 						else resolve(result)
 					})
 				})
-				if (!res || !res.response || typeof res.response !== 'object') {
-					this.log('warn', 'Power status response missing or malformed, skipping')
-					return
-				}
-				const key = Object.keys(res.response)[0]
-				const powerData = key !== undefined ? res.response[key] : undefined
-				if (!powerData) {
-					this.log('warn', 'Power status response contained no power supply data, skipping')
-					return
-				}
-				const powerVariables = {
-					power_status1: this.powerStatus[parseInt(powerData.PowerSupply1Status)] || 'Unknown',
-					power_status2: this.powerStatus[parseInt(powerData.PowerSupply2Status)] || 'Unknown',
-				}
-
-				// Apply change tracking for power status variables
-				const changedPowerVariables = {}
-				Object.entries(powerVariables).forEach(([key, value]) => {
-					if (this.previousVariableValues[key] !== value) {
-						changedPowerVariables[key] = value
-						this.previousVariableValues[key] = value
-					}
-				})
-
-				if (Object.keys(changedPowerVariables).length > 0) {
-					this.setVariableValues(changedPowerVariables)
-				}
+				this.applyPowerStatus(res)
 			} catch (err) {
 				this.log('error', 'EventMaster Power Status Error: ' + err)
 			}
+		}
+	}
+
+	applyPowerStatus(res) {
+		// Some frames may not report power status: say so once, not on every heartbeat
+		const unusable = (why) => {
+			if (!this._powerStatusWarned) this.log('warn', `${why}; power status variables not updated (logged once)`)
+			this._powerStatusWarned = true
+		}
+		if (!res || !res.response || typeof res.response !== 'object')
+			return unusable('Power status response missing or malformed')
+		const key = Object.keys(res.response)[0]
+		const powerData = key !== undefined ? res.response[key] : undefined
+		if (!powerData) return unusable('Power status response contained no power supply data')
+		this._powerStatusWarned = false
+		const powerVariables = {
+			power_status1: this.powerStatus?.[parseInt(powerData.PowerSupply1Status)] || 'Unknown',
+			power_status2: this.powerStatus?.[parseInt(powerData.PowerSupply2Status)] || 'Unknown',
+		}
+
+		// Apply change tracking for power status variables
+		const changedPowerVariables = {}
+		Object.entries(powerVariables).forEach(([key, value]) => {
+			if (this.previousVariableValues[key] !== value) {
+				changedPowerVariables[key] = value
+				this.previousVariableValues[key] = value
+			}
+		})
+
+		if (Object.keys(changedPowerVariables).length > 0) {
+			this.setVariableValues(changedPowerVariables)
 		}
 	}
 
@@ -968,6 +1269,12 @@ class BarcoInstance extends InstanceBase {
 			)
 		}
 
+		variables.push(
+			{ variableId: 'live_updates_status', name: 'Live updates status' },
+			{ variableId: 'live_updates_last', name: 'Last live update received' },
+			{ variableId: 'live_updates_listener', name: 'Address the frame sends live updates to (auto or set)' },
+		)
+
 		// Only update variable definitions if they've changed
 		const variableDefinitionsHash = JSON.stringify(variables)
 		if (this.lastVariableDefinitionsHash !== variableDefinitionsHash) {
@@ -977,6 +1284,7 @@ class BarcoInstance extends InstanceBase {
 			// Clear variable tracking only when definitions actually change
 			this.previousVariableValues = {}
 			this.lastVariableDefinitionsHash = variableDefinitionsHash
+			if (this._statusVariables) this.setVariableValues(this._statusVariables)
 		}
 
 		if (!populate) return
@@ -986,6 +1294,40 @@ class BarcoInstance extends InstanceBase {
 		this.autoPopulateSourceMonitoring().catch((err) =>
 			this.log('error', `Source monitoring update failed: ${err?.message || err}`),
 		)
+	}
+
+	/**
+	 * Read screen (listContent) and aux (listAuxContent) content into the per-destination cache.
+	 * @param {{screens?: number[], auxes?: number[]}} [only] ids to read; omit to read all
+	 */
+	async fetchDestinationContent(only) {
+		this._screenContent = this._screenContent || {}
+		this._auxContent = this._auxContent || {}
+		const wanted = (ids, id) => !only || (ids || []).includes(id)
+		for (const dest of Object.values(this.eventmasterData?.ScreenDestinations || {})) {
+			if (!wanted(only?.screens, dest.id)) continue
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listContent(parseInt(dest.id), (err, result) => (err ? reject(err) : resolve(result)))
+				})
+				if (res?.response) this._screenContent[dest.id] = res.response
+				else this.log('warn', `No response data for screen destination ${dest.id}`)
+			} catch (err) {
+				this.log('error', `Could not get content for screen destination ${dest.id}: ${err}`)
+			}
+		}
+		for (const dest of Object.values(this.eventmasterData?.AuxDestinations || {})) {
+			if (!wanted(only?.auxes, dest.id)) continue
+			try {
+				const res = await new Promise((resolve, reject) => {
+					this.eventmaster.listAuxContent(parseInt(dest.id), (err, result) => (err ? reject(err) : resolve(result)))
+				})
+				if (res?.response) this._auxContent[dest.id] = res.response
+				else this.log('warn', `No response data for AUX destination ${dest.id}`)
+			} catch (err) {
+				this.log('error', `Could not get content for AUX destination ${dest.id}: ${err}`)
+			}
+		}
 	}
 
 	/**
@@ -1292,7 +1634,10 @@ class BarcoInstance extends InstanceBase {
 	 * Auto-populate source monitoring variables by querying all destinations
 	 * Shows which destinations each source is active on
 	 */
-	async autoPopulateSourceMonitoring() {
+	/**
+	 * @param {{screens?: number[], auxes?: number[]}} [only] destinations to re-read; omit to re-read all
+	 */
+	async autoPopulateSourceMonitoring(only) {
 		// Check if EventMaster is connected
 		if (!this.eventmaster) {
 			this.log('warn', 'EventMaster not connected, skipping source monitoring')
@@ -1318,92 +1663,30 @@ class BarcoInstance extends InstanceBase {
 			return
 		}
 
-		// Query all screen destinations to see what sources are active
-		if (this.eventmasterData && this.eventmasterData.ScreenDestinations) {
-			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.ScreenDestinations).length} screen destinations...`)
+		// Read content for the requested destinations (all by default) into the cache, then work out
+		// tally from the cache for every destination, so a targeted read keeps the others' tally
+		await this.fetchDestinationContent(only)
 
-			for (const dest of Object.values(this.eventmasterData.ScreenDestinations)) {
-				try {
-					const res = await new Promise((resolve, reject) => {
-						this.eventmaster.listContent(parseInt(dest.id), (err, result) => {
-							if (err) reject(err)
-							else resolve(result)
-						})
-					})
+		for (const dest of Object.values(this.eventmasterData.ScreenDestinations || {})) {
+			const content = this._screenContent?.[dest.id]
+			if (!content) continue
 
-					if (res && res.response) {
-						const content = res.response
-						// Kept for layer freeze (Layers[].Freeze, PgmMode, PvwMode, Z order)
-						this._screenContent = this._screenContent || {}
-						this._screenContent[dest.id] = content
+			// Background layers: id 0 = PGM, id 1 = PVW
+			for (const bg of content.BGLyr || []) {
+				if (bg.LastBGSourceIndex === undefined || bg.LastBGSourceIndex === -1) continue
+				const target = bg.id === 0 ? sourcePgmDestinations : bg.id === 1 ? sourcePvwDestinations : null
+				if (target?.[bg.LastBGSourceIndex]) target[bg.LastBGSourceIndex].push(`Screen ${dest.Name}`)
+			}
 
-						// Check background layers for PGM (id 0 = PGM background)
-						if (content.BGLyr && content.BGLyr.length > 0) {
-							// this.log('debug', `Screen ${dest.id} has ${content.BGLyr.length} background layers`)
-
-							const pgmBgLayer = content.BGLyr.find((layer) => layer.id === 0)
-							if (pgmBgLayer && pgmBgLayer.LastBGSourceIndex !== undefined && pgmBgLayer.LastBGSourceIndex !== -1) {
-								const sourceId = pgmBgLayer.LastBGSourceIndex
-								if (sourcePgmDestinations[sourceId]) {
-									sourcePgmDestinations[sourceId].push(`Screen ${dest.Name}`)
-								}
-							}
-
-							// Check for PVW background (id 1 = PVW background)
-							const pvwBgLayer = content.BGLyr.find((layer) => layer.id === 1)
-							if (pvwBgLayer && pvwBgLayer.LastBGSourceIndex !== undefined && pvwBgLayer.LastBGSourceIndex !== -1) {
-								const sourceId = pvwBgLayer.LastBGSourceIndex
-								if (sourcePvwDestinations[sourceId]) {
-									sourcePvwDestinations[sourceId].push(`Screen ${dest.Name}`)
-								}
-							}
-						}
-
-						// Check active layers
-						if (content.Layers && content.Layers.length > 0) {
-							content.Layers.forEach((layer) => {
-								// Check if layer is on PGM
-								if (
-									layer.PgmMode !== undefined &&
-									layer.PgmMode > 0 &&
-									layer.LastSrcIdx !== undefined &&
-									layer.LastSrcIdx !== -1 &&
-									layer.Freeze !== undefined &&
-									layer.Freeze === 0
-								) {
-									const sourceId = layer.LastSrcIdx
-									if (sourcePgmDestinations[sourceId]) {
-										sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-									}
-								}
-
-								// Check if layer is on PVW
-								if (
-									layer.PvwMode !== undefined &&
-									layer.PvwMode > 0 &&
-									layer.LastSrcIdx !== undefined &&
-									layer.LastSrcIdx !== -1 &&
-									layer.Freeze !== undefined &&
-									layer.Freeze === 0
-								) {
-									const sourceId = layer.LastSrcIdx
-									if (sourcePvwDestinations[sourceId]) {
-										sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
-									}
-								}
-
-								// Only log inactive layers if you need detailed debugging
-								// if ((layer.PgmMode === 0 && layer.PvwMode === 0) || layer.Freeze > 0) {
-								//     this.log('debug', `Screen ${dest.Name} Layer ${layer.id}: INACTIVE (PgmMode: ${layer.PgmMode}, PvwMode: ${layer.PvwMode}, Freeze: ${layer.Freeze}) - Source: ${layer.SrcIdx + 1}`)
-								// }
-							})
-						}
-					} else {
-						this.log('warn', `No response data for screen destination ${dest.id}`)
-					}
-				} catch (err) {
-					this.log('error', `Could not get content for screen destination ${dest.id}: ${err}`)
-				}
+			// Layers on PGM / PVW (frozen layers excluded)
+			for (const layer of content.Layers || []) {
+				if (layer.LastSrcIdx === undefined || layer.LastSrcIdx === -1) continue
+				if (layer.Freeze === undefined || layer.Freeze !== 0) continue
+				const sourceId = layer.LastSrcIdx
+				if (layer.PgmMode > 0 && sourcePgmDestinations[sourceId])
+					sourcePgmDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
+				if (layer.PvwMode > 0 && sourcePvwDestinations[sourceId])
+					sourcePvwDestinations[sourceId].push(`Screen ${dest.Name} L${layer.id}`)
 			}
 		}
 
@@ -1416,49 +1699,13 @@ class BarcoInstance extends InstanceBase {
 			this.refreshDefinitions()
 		}
 
-		// Query all AUX destinations
-		if (this.eventmasterData && this.eventmasterData.AuxDestinations) {
-			// this.log('debug', `Querying ${Object.keys(this.eventmasterData.AuxDestinations).length} AUX destinations...`)
-
-			for (const dest of Object.values(this.eventmasterData.AuxDestinations)) {
-				try {
-					// this.log('debug', `Querying AUX destination ${dest.id} (${dest.Name})...`)
-
-					const res = await new Promise((resolve, reject) => {
-						this.eventmaster.listAuxContent(parseInt(dest.id), (err, result) => {
-							if (err) reject(err)
-							else resolve(result)
-						})
-					})
-
-					if (res && res.response) {
-						const auxContent = res.response
-						// this.log('debug', `AUX ${dest.id} content structure: ${JSON.stringify(Object.keys(auxContent))}`)
-
-						// Check PGM source
-						if (auxContent.PgmLastSrcIndex !== undefined) {
-							const sourceId = auxContent.PgmLastSrcIndex
-							if (sourcePgmDestinations[sourceId]) {
-								sourcePgmDestinations[sourceId].push(`AUX ${dest.Name}`)
-								// this.log('debug', `AUX ${dest.Name}: PGM = Source ${sourceId}`)
-							}
-						}
-
-						// Check PVW source
-						if (auxContent.PvwLastSrcIndex !== undefined) {
-							const sourceId = auxContent.PvwLastSrcIndex
-							if (sourcePvwDestinations[sourceId]) {
-								sourcePvwDestinations[sourceId].push(`AUX ${dest.Name}`)
-								// this.log('debug', `AUX ${dest.Name}: PVW = Source ${sourceId}`)
-							}
-						}
-					} else {
-						this.log('warn', `No response data for AUX destination ${dest.id}`)
-					}
-				} catch (err) {
-					this.log('error', `Could not get content for AUX destination ${dest.id}: ${err}`)
-				}
-			}
+		for (const dest of Object.values(this.eventmasterData.AuxDestinations || {})) {
+			const auxContent = this._auxContent?.[dest.id]
+			if (!auxContent) continue
+			if (auxContent.PgmLastSrcIndex !== undefined && sourcePgmDestinations[auxContent.PgmLastSrcIndex])
+				sourcePgmDestinations[auxContent.PgmLastSrcIndex].push(`AUX ${dest.Name}`)
+			if (auxContent.PvwLastSrcIndex !== undefined && sourcePvwDestinations[auxContent.PvwLastSrcIndex])
+				sourcePvwDestinations[auxContent.PvwLastSrcIndex].push(`AUX ${dest.Name}`)
 		}
 
 		// Set variable values for all sources
