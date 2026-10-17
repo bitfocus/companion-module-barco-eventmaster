@@ -1197,6 +1197,11 @@ class BarcoInstance extends InstanceBase {
 					variableId: `source_${source.id + 1}_is_active`,
 					name: `${source.Name} - Is Active (PGM or PVW)`,
 				})
+				if (this.isLiveInput(source))
+					variables.push({
+						variableId: `source_${source.id + 1}_signal`,
+						name: `${source.Name} - Signal (OK/No signal/Format mismatch/Out of range/Invalid)`,
+					})
 				if (io)
 					variables.push({
 						variableId: `source_${source.id + 1}_frozen`,
@@ -1230,6 +1235,14 @@ class BarcoInstance extends InstanceBase {
 					variableId: `screen_${screen.id}_name`,
 					name: `Screen ${screen.id} Name`,
 				})
+				variables.push({
+					variableId: `screen_${screen.id}_armed`,
+					name: `Screen ${screen.id} Armed (Yes/No)`,
+				})
+				variables.push({
+					variableId: `screen_${screen.id}_test_pattern`,
+					name: `Screen ${screen.id} Test pattern (name, or Off)`,
+				})
 				if (io)
 					variables.push({
 						variableId: `screen_${screen.id}_frozen`,
@@ -1248,6 +1261,10 @@ class BarcoInstance extends InstanceBase {
 				variables.push({
 					variableId: `aux_${aux.id}_name`,
 					name: `AUX ${aux.id} Name`,
+				})
+				variables.push({
+					variableId: `aux_${aux.id}_test_pattern`,
+					name: `AUX ${aux.id} Test pattern (name, or Off)`,
 				})
 				variables.push({
 					variableId: `aux_${aux.id}_frozen`,
@@ -1293,6 +1310,74 @@ class BarcoInstance extends InstanceBase {
 		// unhandled promise rejection that crashes the module.
 		this.autoPopulateSourceMonitoring().catch((err) =>
 			this.log('error', `Source monitoring update failed: ${err?.message || err}`),
+		)
+	}
+
+	/**
+	 * Arm, signal and test pattern state. Arm and test pattern come from the cached destination
+	 * content (listContent / listAuxContent), signal from listSources. Aux arm isn't reported by
+	 * JSON-RPC at all (9.2), so only screens have an armed state.
+	 */
+	isScreenArmed(id) {
+		return this._screenContent?.[id]?.IsActive === 1
+	}
+
+	// Active test pattern id on a destination's outputs (first non-zero), 0 when off
+	testPatternOf(kind, id) {
+		const content = kind === 'aux' ? this._auxContent?.[id] : this._screenContent?.[id]
+		for (const out of [].concat(content?.OutputCfg ?? []))
+			for (const aoi of [].concat(out?.OutputAOI ?? []))
+				for (const tp of [].concat(aoi?.TestPattern ?? [])) if (tp?.TestPatternMode > 0) return tp.TestPatternMode
+		return 0
+	}
+
+	testPatternLabel(mode) {
+		if (!mode) return 'Off'
+		return (this.CHOICES_TESTPATTERN || []).find((c) => Number(c.id) === mode)?.label || `Pattern ${mode}`
+	}
+
+	// A live input: not a still, and not a destination or user key re-entered as a source
+	isLiveInput(source) {
+		return !!source && source.InputCfgIndex >= 0 && !(source.DestIndex >= 0) && !(source.UserKeyIndex >= 0)
+	}
+
+	// listSources InputCfgVideoStatus: 0 invalid, 1 OK, 2 format mismatch, 3 out of range, 4 no sync
+	sourceSignal(id) {
+		return Object.values(this.eventmasterData?.sources || {}).find((s) => s.id === id)?.InputCfgVideoStatus
+	}
+
+	signalLabel(status) {
+		return ['Invalid', 'OK', 'Format mismatch', 'Out of range', 'No signal'][status] ?? 'Unknown'
+	}
+
+	updateDestinationStateVariables() {
+		const values = {}
+		for (const source of Object.values(this.eventmasterData?.sources || {})) {
+			if (!this.isLiveInput(source) || source.InputCfgVideoStatus === undefined) continue
+			values[`source_${source.id + 1}_signal`] = this.signalLabel(source.InputCfgVideoStatus)
+		}
+		for (const screen of Object.values(this.eventmasterData?.ScreenDestinations || {})) {
+			values[`screen_${screen.id}_armed`] = this.isScreenArmed(screen.id) ? 'Yes' : 'No'
+			values[`screen_${screen.id}_test_pattern`] = this.testPatternLabel(this.testPatternOf('screen', screen.id))
+		}
+		for (const aux of Object.values(this.eventmasterData?.AuxDestinations || {})) {
+			values[`aux_${aux.id}_test_pattern`] = this.testPatternLabel(this.testPatternOf('aux', aux.id))
+		}
+		const changed = {}
+		for (const [key, value] of Object.entries(values)) {
+			if (this.previousVariableValues[key] !== value) {
+				changed[key] = value
+				this.previousVariableValues[key] = value
+			}
+		}
+		if (Object.keys(changed).length > 0) this.setVariableValues(changed)
+		this.checkFeedbacks('screen_armed', 'source_signal_problem', 'test_pattern_active')
+	}
+
+	// After Companion changes arm or test pattern itself, re-read just that destination
+	refreshDestinationContent(screens, auxes) {
+		this.applyLiveUpdate({ full: false, sources: false, destinations: false, screens, auxes }).catch((err) =>
+			this.log('error', `Destination refresh failed: ${err?.message || err}`),
 		)
 	}
 
@@ -1801,6 +1886,9 @@ class BarcoInstance extends InstanceBase {
 			this.log('debug', 'No variable changes detected, skipping update')
 		}
 
+		// Arm, signal and test pattern (from the source list and the content just read)
+		this.updateDestinationStateVariables()
+
 		// Freeze state (from the source and destination lists, and the screen content just read)
 		this.updateFreezeVariablesAndFeedbacks()
 
@@ -2088,7 +2176,10 @@ class BarcoInstance extends InstanceBase {
 				}
 				this.eventmaster.changeAuxContent(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'changeAuxContentTestPattern response: ' + JSON.stringify(res))
+					else {
+						this.log('debug', 'changeAuxContentTestPattern response: ' + JSON.stringify(res))
+						this.refreshDestinationContent([], [params.id])
+					}
 				})
 			},
 		}
@@ -2203,7 +2294,10 @@ class BarcoInstance extends InstanceBase {
 				}
 				this.eventmaster.changeContent(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'changeContentTestPattern response: ' + JSON.stringify(res))
+					else {
+						this.log('debug', 'changeContentTestPattern response: ' + JSON.stringify(res))
+						this.refreshDestinationContent([params.id], [])
+					}
 				})
 			},
 		}
@@ -2911,20 +3005,26 @@ class BarcoInstance extends InstanceBase {
 					choices: [
 						{ id: 1, label: 'Arm' },
 						{ id: 0, label: 'Unarm' },
+						{ id: 'toggle', label: 'Toggle' },
 					],
 					default: 1,
 				},
 			],
 			callback: (action) => {
+				const destId = parseInt(action.options.destId)
 				const params = {
-					ScreenDestination: [{ id: parseInt(action.options.destId) }],
+					ScreenDestination: [{ id: destId }],
 					AuxDestination: [],
-					arm: parseInt(action.options.arm),
+					// Toggle uses the armed state the frame reported (listContent IsActive)
+					arm: action.options.arm === 'toggle' ? (this.isScreenArmed(destId) ? 0 : 1) : parseInt(action.options.arm),
 				}
 				this.log('debug', `Arm/Unarm Destination with params: ${JSON.stringify(params)}`)
 				this.eventmaster.armUnarmDestination(params, (err, res) => {
 					if (err) this.log('error', 'EventMaster Error: ' + err)
-					else this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
+					else {
+						this.log('debug', 'armUnarmDestination response: ' + JSON.stringify(res))
+						this.refreshDestinationContent([params.ScreenDestination[0].id], [])
+					}
 				})
 			},
 		}
@@ -3627,6 +3727,119 @@ class BarcoInstance extends InstanceBase {
 					}
 				}
 				return false
+			},
+		}
+
+		// Arm, signal and test pattern feedbacks
+		const statusScreenChoices = Object.values(this.eventmasterData?.ScreenDestinations || {})
+			.sort((a, b) => a.id - b.id)
+			.map((dest) => ({ id: dest.id, label: dest.Name }))
+		const statusAuxChoices = Object.values(this.eventmasterData?.AuxDestinations || {})
+			.sort((a, b) => a.id - b.id)
+			.map((dest) => ({ id: dest.id, label: dest.Name }))
+		const liveSourceChoices = Object.values(this.eventmasterData?.sources || {})
+			.filter((source) => this.isLiveInput(source))
+			.map((source) => ({ id: source.id, label: source.Name }))
+		feedbacks['screen_armed'] = {
+			type: 'boolean',
+			name: 'Screen Destination Armed',
+			description: 'True when the selected screen destination is armed (selected for transitions)',
+			defaultStyle: {
+				bgcolor: 0x00c800,
+				color: 0x000000,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Screen destination',
+					id: 'destId',
+					choices: statusScreenChoices,
+					default: statusScreenChoices.length > 0 ? statusScreenChoices[0].id : 0,
+				},
+			],
+			callback: (feedback) => this.isScreenArmed(parseInt(feedback.options.destId)),
+		}
+
+		// Id kept from the first version (Source Signal Problem) so existing buttons keep working;
+		// a button saved before "Lights when" existed has no value for it and means "any problem".
+		feedbacks['source_signal_problem'] = {
+			type: 'boolean',
+			name: 'Source Signal',
+			description:
+				'True when the selected input signal matches the chosen condition. The source_N_signal variable shows the state as text.',
+			defaultStyle: {
+				bgcolor: 0xc80000,
+				color: 0xffffff,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Source',
+					id: 'source',
+					minChoicesForSearch: 5,
+					choices: liveSourceChoices,
+					default: liveSourceChoices.length > 0 ? liveSourceChoices[0].id : 0,
+				},
+				{
+					type: 'dropdown',
+					label: 'Lights when',
+					id: 'when',
+					choices: [
+						{ id: 'problem', label: 'Any problem (no signal, format mismatch, out of range, invalid)' },
+						{ id: 'ok', label: 'Signal OK' },
+						{ id: '4', label: 'No signal' },
+						{ id: '2', label: 'Format mismatch' },
+						{ id: '3', label: 'Out of range' },
+						{ id: '0', label: 'Invalid (sync but cannot lock)' },
+					],
+					default: 'problem',
+				},
+			],
+			callback: (feedback) => {
+				const status = this.sourceSignal(parseInt(feedback.options.source))
+				if (status === undefined) return false
+				const when = feedback.options.when ?? 'problem'
+				if (when === 'problem') return status !== 1
+				if (when === 'ok') return status === 1
+				return status === parseInt(when)
+			},
+		}
+
+		const testPatternDestChoices = [
+			...statusScreenChoices.map((d) => ({ id: `screen:${d.id}`, label: d.label })),
+			...statusAuxChoices.map((d) => ({ id: `aux:${d.id}`, label: `AUX ${d.label}` })),
+		]
+		feedbacks['test_pattern_active'] = {
+			type: 'boolean',
+			name: 'Test Pattern Active',
+			description: 'True when a test pattern (any, or the one chosen) is on the selected destination',
+			defaultStyle: {
+				bgcolor: 0xffc800,
+				color: 0x000000,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Destination',
+					id: 'dest',
+					choices: testPatternDestChoices,
+					default: testPatternDestChoices.length > 0 ? testPatternDestChoices[0].id : 'screen:0',
+				},
+				{
+					type: 'dropdown',
+					label: 'Pattern',
+					id: 'pattern',
+					choices: [
+						{ id: 'any', label: 'Any test pattern' },
+						...(this.CHOICES_TESTPATTERN || []).filter((c) => c.id !== '0'),
+					],
+					default: 'any',
+				},
+			],
+			callback: (feedback) => {
+				const [kind, id] = String(feedback.options.dest || 'screen:0').split(':')
+				const mode = this.testPatternOf(kind, parseInt(id))
+				return feedback.options.pattern === 'any' ? mode > 0 : mode === parseInt(feedback.options.pattern)
 			},
 		}
 
