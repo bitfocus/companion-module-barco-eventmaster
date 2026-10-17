@@ -633,7 +633,7 @@ module.exports = function getPresets(eventmasterData, _log) {
 						{
 							actionId: 'testpattern_on_AUX',
 							options: {
-								screenDestination: `${eventmasterData.AuxDestinations[key].id}`,
+								auxDestination: `${eventmasterData.AuxDestinations[key].id}`,
 								testPattern: '0',
 							},
 						},
